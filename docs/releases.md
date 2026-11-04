@@ -32,7 +32,9 @@ subsequent releases can use this check.
   for a coordinated minor; removal requires a major release.
 - Minor releases preserve existing interfaces. The initial OpenAPI check admits
   wholly new non-overlapping paths and schemas while preserving all existing objects and other
-  settings. External/unresolved references and other unproven changes are rejected.
+  settings. Existing reference targets must remain identical. External/unresolved references,
+  dynamic references and scope-changing schema identifiers are rejected when
+  considering an additive minor change. Other unproven changes are rejected.
   Other snapshot formats must stay unchanged until an appropriate compatibility
   analyzer is integrated. This conservative gate can reject compatible changes.
 - A major release permits breaking contract changes but still requires coherent

@@ -116,22 +116,44 @@ def compatible(old, new):
         return False
     # Adding paths/schemas can affect references in an invalid baseline. Reject
     # any external or unresolved local references before considering additions.
+    def resolve(document, reference):
+        if not isinstance(reference, str) or not reference.startswith('#/') or '%' in reference:
+            raise ValueError('Unsupported reference')
+        target = document
+        for part in reference[2:].split('/'):
+            if re.search(r'~(?:[^01]|$)', part):
+                raise ValueError('Invalid JSON pointer escape')
+            key = part.replace('~1', '/').replace('~0', '~')
+            if isinstance(target, list):
+                if not re.fullmatch(r'0|[1-9][0-9]*', key):
+                    raise ValueError('Invalid array pointer')
+                target = target[int(key)]
+            else:
+                target = target[key]
+        return target
+
+    old_references = set()
     for document in (old, new):
         def visit(node):
             if isinstance(node, dict):
+                # Scope-changing and dynamic references need a semantic resolver.
+                # Never treat them as ordinary document-root JSON pointers.
+                if any(key in node for key in ('$id', '$anchor', '$dynamicRef', '$dynamicAnchor',
+                                                '$recursiveRef', '$recursiveAnchor')):
+                    return False
                 if '$ref' in node:
-                    ref = node['$ref']
-                    if not isinstance(ref, str) or not ref.startswith('#/'):
-                        return False
-                    target = document
                     try:
-                        for part in ref[2:].split('/'):
-                            target = target[part.replace('~1', '/').replace('~0', '~')]
-                    except (KeyError, TypeError):
+                        resolve(document, node['$ref'])
+                    except (KeyError, TypeError, ValueError, IndexError):
                         return False
+                    if document is old:
+                        old_references.add(node['$ref'])
                 return all(visit(v) for v in node.values())
             return not isinstance(node, list) or all(visit(v) for v in node)
         if not visit(document):
+            return False
+    for reference in old_references:
+        if not same_json(resolve(old, reference), resolve(new, reference)):
             return False
     # Only additive whole paths and unused new named schemas are admitted.
     # Changes to existing path objects (even new methods) require deeper review.

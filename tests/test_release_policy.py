@@ -161,3 +161,25 @@ class ReleasePolicyTest(unittest.TestCase):
         old = self.bundle('old', document=old_doc)
         new = self.bundle('new', {'api': '1.4.1', 'worker': '1.4.1'}, new_doc)
         with self.assertRaisesRegex(policy.PolicyError, 'patch changed'): policy.validate(old, new)
+
+
+    def test_minor_addition_cannot_change_existing_reference_target(self):
+        old_doc = api()
+        old_doc['components']['schemas'] = {}
+        old_doc['paths']['/items/{id}']['get']['responses']['200']['content'] = {
+            'application/json': {'schema': {'$ref': '#/components/schemas'}}}
+        new_doc = copy.deepcopy(old_doc)
+        new_doc['components']['schemas']['not'] = {}
+        old = self.bundle('old', document=old_doc)
+        new = self.bundle('new', {'api': '1.5.0', 'worker': '1.5.0'}, new_doc, line='1.5')
+        with self.assertRaisesRegex(policy.PolicyError, 'minor compatibility'): policy.validate(old, new)
+
+    def test_minor_unknown_reference_scopes_fail_closed(self):
+        for index, keyword in enumerate(['$dynamicRef', '$id', '$anchor']):
+            old_doc = api(); old_doc['components']['schemas']['Item'][keyword] = '#example'
+            new_doc = copy.deepcopy(old_doc)
+            new_doc['paths']['/health'] = {'get': {'responses': {'200': {'description': 'ok'}}}}
+            old = self.bundle('old' + str(index), document=old_doc)
+            new = self.bundle('new' + str(index), {'api': '1.5.0', 'worker': '1.5.0'}, new_doc, line='1.5')
+            with self.subTest(keyword=keyword), self.assertRaisesRegex(policy.PolicyError, 'minor compatibility'):
+                policy.validate(old, new)
