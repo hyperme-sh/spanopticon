@@ -49,8 +49,8 @@ def manifests(name, image):
          "spec": {"type": "ClusterIP", "selector": labels,
                   "ports": [{"name": "http", "port": 8080, "targetPort": "http"}]}},
         {"apiVersion": "networking.k8s.io/v1", "kind": "NetworkPolicy",
-         "metadata": {"name": "default-deny", "namespace": name},
-         "spec": {"podSelector": {}, "policyTypes": ["Ingress", "Egress"]}},
+         "metadata": {"name": name + "-default-deny", "namespace": name},
+         "spec": {"podSelector": {"matchLabels": labels}, "policyTypes": ["Ingress", "Egress"]}},
     ]
     return {"compose.yaml": compose,
             "kubernetes.json": {"apiVersion": "v1", "kind": "List", "items": items}}
@@ -62,14 +62,11 @@ def generate(name, image, output):
     # mkdir is an exclusive reservation: refuse directories, files and symlinks.
     # Do not replace another operator's path, even an empty directory.
     output.mkdir()
-    try:
-        for filename, content in data.items():
-            with (output / filename).open("x", encoding="utf-8") as stream:
-                json.dump(content, stream, indent=2)
-                stream.write("\n")
-    except Exception:
-        # Preserve partial files for inspection; never delete an operator's data.
-        raise
+    # Preserve partial files on I/O failure for operator inspection.
+    for filename, content in data.items():
+        with (output / filename).open("x", encoding="utf-8") as stream:
+            json.dump(content, stream, indent=2)
+            stream.write("\n")
     return output
 
 

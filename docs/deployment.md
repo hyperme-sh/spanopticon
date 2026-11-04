@@ -24,7 +24,7 @@ endpoints externally before sending traffic.
 ## Kubernetes
 
 `kubernetes.json` contains a Namespace, Deployment, ClusterIP Service and
-default-deny NetworkPolicy for that namespace. It creates no public ingress,
+default-deny NetworkPolicy scoped to the generated application pods. It creates no public ingress,
 credentials, storage, workload identity or cloud resources. The pod disables
 automatic service-account token mounting, drops capabilities and uses the runtime
 default seccomp profile.
@@ -36,7 +36,8 @@ cluster version's schema and admission policies. Default-deny means the generate
 service cannot receive ordinary application traffic until you authorize it.
 
 Run server-side dry-run against the intended cluster only after reviewing the
-context and namespace. Application readiness, migration/rollback compatibility,
+context and namespace. Verify that the application name and labels do not collide
+with an existing workload; use a dedicated namespace for each plane. Application readiness, migration/rollback compatibility,
 resource sizing, backup restore and dependency outage behavior require integration
 qualification. The example limits and probe timings are initial values, not
 capacity claims.

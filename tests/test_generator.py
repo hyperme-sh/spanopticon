@@ -40,3 +40,13 @@ class GeneratorTests(unittest.TestCase):
                     generator.generate("example", IMAGE, root / name)
             self.assertEqual((root / "file").read_text(), "keep")
             self.assertEqual(list((root / "directory").iterdir()), [])
+
+    def test_network_policy_selects_only_the_generated_application(self):
+        kube = generator.manifests("example", IMAGE)["kubernetes.json"]
+        policy = next(i for i in kube["items"] if i["kind"] == "NetworkPolicy")
+        deployment = next(i for i in kube["items"] if i["kind"] == "Deployment")
+        selector = policy["spec"]["podSelector"]["matchLabels"]
+        own_labels = deployment["spec"]["template"]["metadata"]["labels"]
+        self.assertTrue(all(own_labels.get(k) == v for k, v in selector.items()))
+        unrelated = {"app.kubernetes.io/name": "unrelated"}
+        self.assertFalse(all(unrelated.get(k) == v for k, v in selector.items()))
