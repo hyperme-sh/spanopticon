@@ -121,3 +121,34 @@ The public CI also calls this reusable workflow against the synthetic example
 bundles and checks that its pinned policy code matches the reviewed source. When
 changing policy code, update its immutable checkout pin in the same review; do
 not leave reusable callers executing an older checker.
+
+## Component repository rollout
+
+The initial coordinated line is **0.24.x**. Earlier libraries already used minor
+versions through 0.23, so 0.2 would be a downgrade. Do not rewrite existing package
+versions or dependency pins merely to make the configuration check green.
+
+Each owner keeps `release-policy.json` with `schema_version: 1`, its exact
+`repository` and `component` name, `line: "0.24"`, and a nonempty `version_files`
+list of its owning `pyproject.toml` or `package.json` files. Its caller workflow
+pins `component-release.yml` by full SHA and passes the agreed line. Repository
+variable `SPANOPTICON_RELEASE_BASELINE_SHA` must point to a reviewed immutable
+commit containing `releases/accepted/release.json` and its real contracts/artifact
+metadata. Submit the actual next bundle at `releases/candidate/release.json`.
+
+A configuration-only PR check does not approve a release. A package version change
+or candidate bundle submission requires full admission. Tag and manual release
+requests always require admission and must match the candidate version. Missing
+baselines fail closed. The candidate must contain exactly the owning component,
+use the coordinated line and match every configured package version. The full
+bundle policy still checks immutable artifacts, patch contracts and minor/major
+compatibility. Artifact provenance and owning consumer tests remain separate
+required checks; this workflow never publishes artifacts or deploys anything.
+
+Required-check protection and publisher dependencies must be configured before
+calling this mandatory enforcement. A workflow file cannot prevent an authorized
+person from manually publishing a release outside that workflow. If the GitHub
+plan does not support required checks on private repositories, report that as an
+unresolved enforcement prerequisite; do not make repositories public or silently
+claim the setup is protected. Keep release publication blocked until a real
+baseline and all owner qualifications exist.
