@@ -108,3 +108,21 @@ class ComponentReleaseTest(unittest.TestCase):
         (self.previous / 'extra/pyproject.toml').write_text('[project]\nname="owned-package"\nversion="0.24.0"\n')
         with self.assertRaisesRegex(ValueError, 'Duplicate package identity'):
             module.release_required(self.current, self.previous, 'example/component', '0.24')
+
+    def test_bumped_original_cannot_hide_behind_new_old_version_decoy(self):
+        config = json.loads((self.current / 'release-policy.json').read_text())
+        (self.previous / 'release-policy.json').write_text(json.dumps(config))
+        (self.previous / 'pyproject.toml').write_text('[project]\nname="owned"\nversion="0.24.0"\n')
+        (self.current / 'pyproject.toml').write_text('[project]\nname="owned"\nversion="0.24.1"\n')
+        (self.current / 'decoy').mkdir()
+        (self.current / 'decoy/pyproject.toml').write_text('[project]\nname="owned"\nversion="0.24.0"\n')
+        config['version_files'] = ['decoy/pyproject.toml']
+        (self.current / 'release-policy.json').write_text(json.dumps(config))
+        self.assertTrue(module.release_required(self.current, self.previous, 'example/component', '0.24'))
+
+    def test_switch_to_preexisting_manifest_is_not_a_proven_move(self):
+        self.test_bumped_original_cannot_hide_behind_new_old_version_decoy()
+        (self.current / 'pyproject.toml').unlink()
+        (self.previous / 'decoy').mkdir()
+        (self.previous / 'decoy/pyproject.toml').write_text('[project]\nname="owned"\nversion="0.24.0"\n')
+        self.assertTrue(module.release_required(self.current, self.previous, 'example/component', '0.24'))

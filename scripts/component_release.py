@@ -69,12 +69,27 @@ def release_required(current, previous, repository, line):
             else:
                 identity = ('path', relative)
             require(identity not in packages, 'Duplicate package identity in version sources')
-            packages[identity] = value
+            packages[identity] = (value, relative)
         return packages
 
     # Compare the same owning package across a layout move. Added/removed names
     # and version changes still require the existing compatibility admission.
-    return identities(current, versions) != identities(previous_root, old_versions)
+    current_packages = identities(current, versions)
+    previous_packages = identities(previous_root, old_versions)
+    if current_packages.keys() != previous_packages.keys():
+        return True
+    for identity, (value, relative) in current_packages.items():
+        old_value, old_relative = previous_packages[identity]
+        if value != old_value:
+            return True
+        if relative != old_relative:
+            # A policy edit alone must not redirect tracking to an old-version
+            # decoy while the original package remains (possibly bumped).
+            # Both sides of a move must be demonstrable in these snapshots.
+            if (os.path.lexists(Path(current) / old_relative)
+                    or os.path.lexists(previous_root / relative)):
+                return True
+    return False
 
 
 
