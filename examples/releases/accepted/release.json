@@ -1,0 +1,26 @@
+{
+  "schema_version": 1,
+  "line": "1.4",
+  "components": {
+    "api": {
+      "version": "1.4.0",
+      "contract": "api.json",
+      "contract_sha256": "d3efb4d32d3707afe5f97b2d099b324cb03a8a413920f305c035395417ae4509",
+      "artifact": {
+        "kind": "container",
+        "uri": "registry.example.org/api@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      }
+    },
+    "worker": {
+      "version": "1.4.2",
+      "contract": "worker.json",
+      "contract_sha256": "0f5a7677146d6b4a3050f8a523e83fb63859368a0b86560bf9705eeec7457e6f",
+      "artifact": {
+        "kind": "container",
+        "uri": "registry.example.org/worker@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      }
+    }
+  }
+}
