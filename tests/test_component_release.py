@@ -94,3 +94,17 @@ class ComponentReleaseTest(unittest.TestCase):
         (self.current / 'release-policy.json').write_text(json.dumps(config))
         with self.assertRaisesRegex(ValueError, 'Duplicate package identity'):
             module.release_required(self.current, self.previous, 'example/component', '0.24')
+
+    def test_python_distribution_aliases_cannot_duplicate_identity(self):
+        (self.current / 'pyproject.toml').write_text('[project]\nname="Owned_Package"\nversion="0.24.0"\n')
+        (self.current / 'extra').mkdir()
+        (self.current / 'extra/pyproject.toml').write_text('[project]\nname="owned-package"\nversion="0.24.0"\n')
+        config = json.loads((self.current / 'release-policy.json').read_text())
+        config['version_files'].append('extra/pyproject.toml')
+        (self.current / 'release-policy.json').write_text(json.dumps(config))
+        # The prior source is otherwise valid; alias detection must reject the
+        # candidate before accepting two spellings as distinct distributions.
+        (self.previous / 'extra').mkdir()
+        (self.previous / 'extra/pyproject.toml').write_text('[project]\nname="owned-package"\nversion="0.24.0"\n')
+        with self.assertRaisesRegex(ValueError, 'Duplicate package identity'):
+            module.release_required(self.current, self.previous, 'example/component', '0.24')

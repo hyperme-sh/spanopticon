@@ -63,7 +63,11 @@ def release_required(current, previous, repository, line):
             document = tomllib.loads(path.read_text()) if kind == 'python' else json_document(path)
             name = document['project'].get('name') if kind == 'python' else document.get('name')
             # Unnamed historical bootstrap fixtures cannot authorize a move.
-            identity = (kind, name) if isinstance(name, str) and name else ('path', relative)
+            if isinstance(name, str) and name:
+                normalized = re.sub(r'[-_.]+', '-', name).lower() if kind == 'python' else name.lower()
+                identity = (kind, normalized)
+            else:
+                identity = ('path', relative)
             require(identity not in packages, 'Duplicate package identity in version sources')
             packages[identity] = value
         return packages
