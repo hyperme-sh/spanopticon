@@ -25,4 +25,9 @@ Python 3.11 or newer is required; the generator has no third-party dependencies.
 
 These templates are starting configurations. Read the deployment checklist before
 using them with real traffic. Public documentation does not grant access to
-private service implementations. Licensing has not yet been selected.
+private service implementations.
+
+## License
+
+The documentation, templates and generator in this repository are licensed under
+the [Apache License, Version 2.0](LICENSE).
