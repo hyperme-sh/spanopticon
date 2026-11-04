@@ -52,6 +52,11 @@ jobs:
           ref: ba386cd5fca08d68604a5c992a09c454c1102d4f
           path: policy
           persist-credentials: false
+      - name: Keep the public policy pin aligned with reviewed code
+        if: github.repository == 'hyperme-sh/spanopticon'
+        run: |
+          cmp candidate/release/policy.py policy/release/policy.py
+          cmp candidate/scripts/check_release.py policy/scripts/check_release.py
       - name: Validate the release bundle
         run: |
           python3 - <<'PY'

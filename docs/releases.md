@@ -114,3 +114,8 @@ candidate bundle. Require its `compatibility` job together with artifact and
 consumer tests before release promotion. Protect the caller workflow and baseline
 selection from unreviewed changes. Do not publish a release merely because these
 metadata checks pass.
+
+The public CI also calls this reusable workflow against the synthetic example
+bundles and checks that its pinned policy code matches the reviewed source. When
+changing policy code, update its immutable checkout pin in the same review; do
+not leave reusable callers executing an older checker.
