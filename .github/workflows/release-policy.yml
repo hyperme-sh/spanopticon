@@ -1,0 +1,64 @@
+name: Coordinated release policy
+on:
+  workflow_call:
+    inputs:
+      baseline-ref:
+        description: Full immutable commit of the last accepted bundle in the caller repository
+        type: string
+        required: true
+      baseline-manifest:
+        description: Repository-relative accepted manifest path
+        type: string
+        default: releases/accepted/release.json
+      candidate-manifest:
+        description: Repository-relative candidate manifest path
+        type: string
+        default: releases/candidate/release.json
+permissions:
+  contents: read
+jobs:
+  compatibility:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    env:
+      BASELINE_REF: ${{ inputs.baseline-ref }}
+      BASELINE_MANIFEST: ${{ inputs.baseline-manifest }}
+      CANDIDATE_MANIFEST: ${{ inputs.candidate-manifest }}
+    steps:
+      - name: Require an immutable baseline and confined paths
+        run: |
+          python3 - <<'PY'
+          import os, re
+          from pathlib import PurePosixPath
+          assert re.fullmatch(r'[0-9a-f]{40}', os.environ['BASELINE_REF']), 'Baseline must be a full commit SHA'
+          for key in ('BASELINE_MANIFEST', 'CANDIDATE_MANIFEST'):
+              value = os.environ[key]
+              path = PurePosixPath(value)
+              assert value and not path.is_absolute() and '..' not in path.parts, 'Manifest path must be repository-relative'
+          PY
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.sha }}
+          path: candidate
+          persist-credentials: false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ inputs.baseline-ref }}
+          path: previous
+          persist-credentials: false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: hyperme-sh/spanopticon
+          ref: ba386cd5fca08d68604a5c992a09c454c1102d4f
+          path: policy
+          persist-credentials: false
+      - name: Validate the release bundle
+        run: |
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+          for root, key in [('previous', 'BASELINE_MANIFEST'), ('candidate', 'CANDIDATE_MANIFEST')]:
+              base = Path(root).resolve()
+              assert (base / os.environ[key]).resolve().is_relative_to(base), 'Manifest symlink escapes checkout'
+          PY
+          python3 policy/scripts/check_release.py --previous "previous/$BASELINE_MANIFEST" --candidate "candidate/$CANDIDATE_MANIFEST"

@@ -95,3 +95,22 @@ A bundle has `schema_version: 1`, a `line` (`MAJOR.MINOR`) and a nonempty
 the identical digest. `kind: package` supports non-container library artifacts;
 its digest/provenance must be verified by the artifact-producing workflow.
 See the synthetic [example bundles](../examples/releases/README.md).
+
+
+## Reuse the CI gate
+
+Call `.github/workflows/release-policy.yml` from the private repository that owns
+the assembled bundle. Pin the reusable workflow to its reviewed full commit SHA.
+Supply `baseline-ref` as the full immutable commit of the **last accepted release**
+in that repository, plus optional `baseline-manifest` and `candidate-manifest`
+paths. The default paths are `releases/accepted/release.json` and
+`releases/candidate/release.json`. The baseline and candidate need not have the
+same path. It must be a protected release-owner decision which commit is accepted;
+a caller-controlled SHA alone is not proof of acceptance.
+
+The workflow reads only the caller repository and pinned public policy code. It
+accepts no secrets, runs on hosted Ubuntu and never executes scripts from the
+candidate bundle. Require its `compatibility` job together with artifact and
+consumer tests before release promotion. Protect the caller workflow and baseline
+selection from unreviewed changes. Do not publish a release merely because these
+metadata checks pass.
