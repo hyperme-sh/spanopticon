@@ -34,3 +34,17 @@ private service implementations.
 
 The documentation, templates and generator in this repository are licensed under
 the [Apache License, Version 2.0](LICENSE).
+
+## Template release channels
+
+A successful main push publishes the tested template/generator archive as an
+immutable `test-<commit>` GitHub prerelease, after both template checks and the
+coordinated-release policy gate pass. A `vMAJOR.MINOR.PATCH` tag at that commit
+promotes the same archive bytes to a stable release. This is a template release,
+not publication or deployment of the services described by a plane manifest.
+The coordinated service compatibility policy remains a separate required check.
+
+Repository immutable releases must be enabled. Promotion verifies the original
+successful Actions artifact, not just release metadata, and must occur before
+that artifact expires (90-day requested retention). Expired evidence requires a
+new validated main revision. No deployment credentials or reviewer gate are used.
