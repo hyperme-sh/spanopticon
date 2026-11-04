@@ -21,7 +21,7 @@ class GeneratorTests(unittest.TestCase):
             self.assertEqual(deployment["spec"]["template"]["spec"]["containers"][0]["image"], IMAGE)
 
     def test_refuses_mutable_images_and_invalid_names_before_writing(self):
-        for name, image in [("../escape", IMAGE), ("Example", IMAGE), ("a" * 64, IMAGE),
+        for name, image in [("1plane", IMAGE), ("../escape", IMAGE), ("Example", IMAGE), ("a" * 64, IMAGE),
                             ("ok", "example:latest"), ("ok", IMAGE + "\n")]:
             with self.subTest(name=name, image=image), tempfile.TemporaryDirectory() as temp:
                 target = Path(temp) / "out"

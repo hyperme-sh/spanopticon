@@ -5,13 +5,13 @@ import json
 from pathlib import Path
 import re
 
-NAME = re.compile(r"[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\Z")
+NAME = re.compile(r"[a-z](?:[a-z0-9-]{0,61}[a-z0-9])?\Z")
 IMAGE = re.compile(r"[a-z0-9][a-z0-9._:/-]*@sha256:[0-9a-f]{64}\Z")
 
 
 def manifests(name, image):
     if not NAME.fullmatch(name):
-        raise ValueError("name must be a lowercase DNS label of 1 to 63 characters")
+        raise ValueError("name must be a lowercase DNS label of 1 to 63 characters starting with a letter")
     if not IMAGE.fullmatch(image):
         raise ValueError("image must be an image reference with a lowercase SHA-256 digest")
     labels = {"app.kubernetes.io/name": name}

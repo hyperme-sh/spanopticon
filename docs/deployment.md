@@ -1,7 +1,8 @@
 # Generate and qualify a deployment
 
 Use `scripts/new_plane.py NAME --image IMAGE@sha256:DIGEST --output DIRECTORY`.
-Names are lowercase DNS labels up to 63 characters. Image tags alone are refused.
+Names are lowercase DNS labels up to 63 characters and must start with a letter,
+so Service names work without optional cluster feature gates. Image tags alone are refused.
 The output directory must not exist; existing deployments are never overwritten.
 Both output files use JSON, which Docker Compose and Kubernetes accept directly.
 
