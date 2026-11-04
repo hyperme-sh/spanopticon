@@ -153,3 +153,11 @@ class ReleasePolicyTest(unittest.TestCase):
         # The CLI rejects an incompatible bundle before creating output.
         with self.assertRaises(ValueError): render(old, bad, self.root / 'bad-output')
         self.assertFalse((self.root / 'bad-output').exists())
+
+
+    def test_boolean_and_numeric_schema_values_are_not_equivalent(self):
+        old_doc = api(); old_doc['components']['schemas']['Item']['enum'] = [1]
+        new_doc = api(); new_doc['components']['schemas']['Item']['enum'] = [True]
+        old = self.bundle('old', document=old_doc)
+        new = self.bundle('new', {'api': '1.4.1', 'worker': '1.4.1'}, new_doc)
+        with self.assertRaisesRegex(policy.PolicyError, 'patch changed'): policy.validate(old, new)

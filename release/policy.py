@@ -97,6 +97,12 @@ def load_bundle(manifest):
     return data, contracts
 
 
+def same_json(left, right):
+    # Python considers True == 1, but those are different API/schema values.
+    return json.dumps(left, sort_keys=True, separators=(',', ':'), allow_nan=False) == json.dumps(
+        right, sort_keys=True, separators=(',', ':'), allow_nan=False)
+
+
 def compatible(old, new):
     """Conservative minor gate: only wholly new OpenAPI operations/schemas.
 
@@ -104,7 +110,7 @@ def compatible(old, new):
     exactly equal. Other contract formats must remain equal until their own
     compatibility checker is implemented; unknown changes never pass by default.
     """
-    if old == new:
+    if same_json(old, new):
         return True
     if not (isinstance(old.get('openapi'), str) and old.get('openapi') == new.get('openapi')):
         return False
@@ -142,7 +148,7 @@ def compatible(old, new):
     new_schemas = new.get('components', {}).get('schemas', {})
     for key in set(new_schemas) - set(old_schemas):
         del stripped['components']['schemas'][key]
-    return stripped == old
+    return same_json(stripped, old)
 
 
 def validate(previous, candidate):
@@ -160,10 +166,10 @@ def validate(previous, candidate):
         before, after = old['components'][name], new['components'][name]
         require(version(after['version']) >= version(before['version']), f'{name}: version rollback')
         if before['version'] == after['version']:
-            require(before['artifact'] == after['artifact'] and old_contracts[name] == new_contracts[name],
+            require(same_json(before['artifact'], after['artifact']) and same_json(old_contracts[name], new_contracts[name]),
                     f'{name}: existing version is immutable')
         if old_line == new_line:
-            require(old_contracts[name] == new_contracts[name], f'{name}: patch changed the API contract')
+            require(same_json(old_contracts[name], new_contracts[name]), f'{name}: patch changed the API contract')
         elif old_line[0] == new_line[0]:
             require(compatible(old_contracts[name], new_contracts[name]),
                     f'{name}: minor compatibility cannot be established; use a major release for breaking changes')
