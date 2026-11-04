@@ -158,3 +158,11 @@ A workflow cannot prevent an authorized person from publishing outside that
 workflow; describe enforcement as applying to the configured pipeline. GitHub
 plan upgrades and branch protection are not adoption prerequisites. Real accepted
 baselines and automated artifact/consumer qualification remain necessary.
+
+Package version sources may move within an owner repository during standalone
+extraction. Configuration checks compare their package ecosystem, declared name,
+and version with the previous policy's sources, so the same package can move
+without creating a release. Added or removed package identities and version
+changes still enter compatibility admission. Duplicate identities fail closed;
+a source path cannot escape the checkout. This does not qualify artifacts or
+consumers, publish a release, or add a human approval prerequisite.

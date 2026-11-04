@@ -41,13 +41,37 @@ def release_required(current, previous, repository, line):
     # A candidate submission always needs admission, even without a version bump.
     if (Path(current) / 'releases/candidate/release.json').exists():
         return True
-    for relative, value in versions.items():
-        path = contract_path(Path(previous).resolve(), relative)
-        old = (tomllib.loads(path.read_text())['project']['version']
-               if path.name == 'pyproject.toml' else json_document(path)['version'])
-        if value != old:
-            return True
-    return False
+    previous_root = Path(previous).resolve()
+    previous_policy = previous_root / 'release-policy.json'
+    if previous_policy.exists():
+        old_config = json_document(contract_path(previous_root, 'release-policy.json'))
+        _, old_versions = configuration(previous_root, repository, old_config.get('line'))
+    else:
+        # Preserve initial policy-bootstrap behavior: before a policy existed,
+        # every current version source must already exist at its declared path.
+        old_versions = {}
+        for relative in versions:
+            path = contract_path(previous_root, relative)
+            old_versions[relative] = (tomllib.loads(path.read_text())['project']['version']
+                if path.name == 'pyproject.toml' else json_document(path)['version'])
+
+    def identities(root, values):
+        packages = {}
+        for relative, value in values.items():
+            path = contract_path(Path(root).resolve(), relative)
+            kind = 'python' if path.name == 'pyproject.toml' else 'node'
+            document = tomllib.loads(path.read_text()) if kind == 'python' else json_document(path)
+            name = document['project'].get('name') if kind == 'python' else document.get('name')
+            # Unnamed historical bootstrap fixtures cannot authorize a move.
+            identity = (kind, name) if isinstance(name, str) and name else ('path', relative)
+            require(identity not in packages, 'Duplicate package identity in version sources')
+            packages[identity] = value
+        return packages
+
+    # Compare the same owning package across a layout move. Added/removed names
+    # and version changes still require the existing compatibility admission.
+    return identities(current, versions) != identities(previous_root, old_versions)
+
 
 
 def admit(current, baseline, repository, line, requested_version=None):

@@ -62,3 +62,35 @@ class ComponentReleaseTest(unittest.TestCase):
         config['version_files'] = ['../outside/pyproject.toml']
         (self.current / 'release-policy.json').write_text(json.dumps(config))
         with self.assertRaises(ValueError): module.configuration(self.current, 'example/component', '0.24')
+
+    def test_package_move_preserves_identity_and_detects_version_changes(self):
+        (self.previous / 'release-policy.json').write_text((self.current / 'release-policy.json').read_text())
+        (self.previous / 'pyproject.toml').write_text('[project]\nname="owned"\nversion="0.24.0"\n')
+        (self.current / 'pyproject.toml').unlink()
+        folder = self.current / 'service'; folder.mkdir()
+        moved = folder / 'pyproject.toml'
+        moved.write_text('[project]\nname="owned"\nversion="0.24.0"\n')
+        config = json.loads((self.current / 'release-policy.json').read_text())
+        config['version_files'] = ['service/pyproject.toml']
+        (self.current / 'release-policy.json').write_text(json.dumps(config))
+        self.assertFalse(module.release_required(self.current, self.previous, 'example/component', '0.24'))
+        for name, ver in [('owned', '0.24.1'), ('substitute', '0.24.0')]:
+            moved.write_text(f'[project]\nname="{name}"\nversion="{ver}"\n')
+            self.assertTrue(module.release_required(self.current, self.previous, 'example/component', '0.24'))
+
+    def test_removing_tracked_package_requires_admission(self):
+        (self.previous / 'extra').mkdir()
+        (self.previous / 'extra/pyproject.toml').write_text('[project]\nname="extra"\nversion="0.24.0"\n')
+        config = json.loads((self.current / 'release-policy.json').read_text())
+        config['version_files'].append('extra/pyproject.toml')
+        (self.previous / 'release-policy.json').write_text(json.dumps(config))
+        self.assertTrue(module.release_required(self.current, self.previous, 'example/component', '0.24'))
+
+    def test_duplicate_package_names_fail_closed(self):
+        self.test_package_move_preserves_identity_and_detects_version_changes()
+        (self.current / 'pyproject.toml').write_text('[project]\nname="substitute"\nversion="0.24.0"\n')
+        config = json.loads((self.current / 'release-policy.json').read_text())
+        config['version_files'].append('pyproject.toml')
+        (self.current / 'release-policy.json').write_text(json.dumps(config))
+        with self.assertRaisesRegex(ValueError, 'Duplicate package identity'):
+            module.release_required(self.current, self.previous, 'example/component', '0.24')
