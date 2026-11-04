@@ -153,7 +153,10 @@ def compatible(old, new):
         if not visit(document):
             return False
     for reference in old_references:
-        if not same_json(resolve(old, reference), resolve(new, reference)):
+        try:
+            if not same_json(resolve(old, reference), resolve(new, reference)):
+                return False
+        except (KeyError, TypeError, ValueError, IndexError):
             return False
     # Only additive whole paths and unused new named schemas are admitted.
     # Changes to existing path objects (even new methods) require deeper review.

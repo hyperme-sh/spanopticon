@@ -183,3 +183,17 @@ class ReleasePolicyTest(unittest.TestCase):
             new = self.bundle('new' + str(index), {'api': '1.5.0', 'worker': '1.5.0'}, new_doc, line='1.5')
             with self.subTest(keyword=keyword), self.assertRaisesRegex(policy.PolicyError, 'minor compatibility'):
                 policy.validate(old, new)
+
+
+    def test_minor_accepts_new_schema_used_only_by_new_operation(self):
+        old_doc = api()
+        old_doc['paths']['/items/{id}']['get']['responses']['200']['content'] = {
+            'application/json': {'schema': {'$ref': '#/components/schemas/Item'}}}
+        new_doc = copy.deepcopy(old_doc)
+        new_doc['components']['schemas']['Health'] = {'type': 'boolean'}
+        new_doc['paths']['/health'] = {'get': {'responses': {'200': {
+            'description': 'ok', 'content': {'application/json': {
+                'schema': {'$ref': '#/components/schemas/Health'}}}}}}}
+        old = self.bundle('old', document=old_doc)
+        new = self.bundle('new', {'api': '1.5.0', 'worker': '1.5.0'}, new_doc, line='1.5')
+        policy.validate(old, new)
