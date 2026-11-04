@@ -1,0 +1,26 @@
+{
+  "schema_version": 1,
+  "line": "1.4",
+  "components": {
+    "api": {
+      "version": "1.4.1",
+      "contract": "api.json",
+      "contract_sha256": "b8a727e5eada538ad3576a613a51740ddf0879c18baf652661fe3a44a72ddf9a",
+      "artifact": {
+        "kind": "container",
+        "uri": "registry.example.org/api@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      }
+    },
+    "worker": {
+      "version": "1.4.5",
+      "contract": "worker.json",
+      "contract_sha256": "39793ee02544da13c8451cd1e5397be04586ea472fd93ea09aa1396f93e51ed2",
+      "artifact": {
+        "kind": "container",
+        "uri": "registry.example.org/worker@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      }
+    }
+  }
+}
