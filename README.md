@@ -5,6 +5,9 @@ A plane combines services behind explicit identity, tenant, event and operations
 contracts. Service implementations and their release cycles remain in their own
 repositories.
 
+See [coordinated releases](docs/releases.md) for shared major/minor versions,
+independent patches and the compatibility gate.
+
 Start with [architecture](docs/architecture.md), then
 [generate a deployment](docs/deployment.md). The generator produces Docker Compose
 and Kubernetes manifests for an image you supply by immutable SHA-256 digest.

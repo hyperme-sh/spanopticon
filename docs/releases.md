@@ -1,0 +1,97 @@
+# Coordinated releases
+
+Every participating repository uses the same **major/minor** version. Patch
+numbers advance independently: a `1.4` bundle can contain `1.4.2` and `1.4.9`.
+A coordinated minor release advances every participating component to `1.5.x`.
+A breaking API change requires a new major version, including before `1.0`.
+Pre-release versions are not supported by this initial stable-release gate.
+
+A release bundle records the line, complete component membership, each component's
+version, immutable artifact identity and digest-bound API snapshot. Keep private
+component inventories and their snapshots in private release repositories. The
+public examples contain invented components and artifact digests only.
+
+```sh
+python3 scripts/check_release.py \
+  --previous /path/to/accepted/release.json \
+  --candidate /path/to/candidate/release.json
+```
+
+Both files are required. The gate never silently substitutes the PR base or HEAD
+for the last accepted release, and has no skip/waiver switch. Initial bootstrap
+must be explicitly reviewed and recorded as an immutable accepted bundle before
+subsequent releases can use this check.
+
+## Compatibility rules
+
+- Patch releases must preserve the complete parsed API snapshot. Object-key order
+  and whitespace may differ. OpenAPI `info.version` must match the component
+  version and is excluded only from the compatibility comparison. Even additive API changes wait for a minor release.
+- Existing versions cannot change their artifact or API. Versions cannot roll back.
+- Component versions must match the bundle's major/minor. Membership changes wait
+  for a coordinated minor; removal requires a major release.
+- Minor releases preserve existing interfaces. The initial OpenAPI check admits
+  wholly new non-overlapping paths and schemas while preserving all existing objects and other
+  settings. External/unresolved references and other unproven changes are rejected.
+  Other snapshot formats must stay unchanged until an appropriate compatibility
+  analyzer is integrated. This conservative gate can reject compatible changes.
+- A major release permits breaking contract changes but still requires coherent
+  component versions, complete snapshots and immutable artifact identities.
+
+Export canonical snapshots without volatile build metadata. Include HTTP request
+and response schemas, authentication requirements, events, protobuf descriptors,
+configuration and public library signatures that consumers depend on. Do not
+omit an interface just to pass the gate. An OpenAPI-only snapshot says nothing
+about an omitted event or Python import contract.
+
+The gate validates declared snapshots and artifact metadata offline; it does not
+prove that an artifact exists, that it exports the snapshot, or that runtime
+behavior is compatible. Each component's CI must build the exact artifact, export
+its actual contracts, run its unit/provider/consumer tests and verify artifact
+provenance. Breaking behavior with an unchanged schema must still fail those tests.
+
+## Release pipeline
+
+1. Build and test each component in its owning repository. Record its version,
+   artifact digest, exported API snapshot and successful consumer qualification.
+2. Assemble the complete candidate bundle for one release line. Pin every artifact;
+   do not resolve `latest` or floating tags during promotion.
+3. Retrieve the last accepted bundle from a protected immutable release revision,
+   independently of candidate-controlled data. Run the policy gate and cross-service
+   consumer tests. Require both checks before publishing/promoting a release.
+4. Publish the accepted bundle and artifacts only through the protected release
+   workflow. Restrict tag/release updates and require reviewed changes to release
+   policy, baseline selection and CI workflows.
+5. Render deployment configuration from that accepted bundle. Verify registry
+   provenance, environment configuration and rollback compatibility before applying.
+
+This repository supplies the gate and reusable CI wiring. Adding the files does
+not enable checks or release protection in every component repository. Roll out
+required checks, version changes and artifact provenance in each owner before
+claiming fleet-wide enforcement. A manual image-only template is not a coordinated
+release and must not be used to bypass the production promotion gate.
+
+
+## Render a validated bundle
+
+```sh
+python3 scripts/render_release.py \
+  --previous /path/to/accepted/release.json \
+  --candidate /path/to/candidate/release.json \
+  --output /path/to/new-output-directory
+```
+
+The renderer rejects incompatible bundles before writing files, pins container
+images to validated digests and copies the digest-checked contracts. Package
+artifacts remain in the lock manifest but do not create deployments. The output
+must not exist. A final `release.json` is written only after all files are written.
+No registry login, cluster operation, image pull or deployment occurs. Add reviewed
+service-specific identity, configuration, storage and network overlays before
+applying; generated services do not automatically gain access to one another.
+
+A bundle has `schema_version: 1`, a `line` (`MAJOR.MINOR`) and a nonempty
+`components` object. Each component names `version`, relative `contract`, raw-file
+`contract_sha256` and `artifact` (`kind`, `uri`, `sha256`). Container URIs must carry
+the identical digest. `kind: package` supports non-container library artifacts;
+its digest/provenance must be verified by the artifact-producing workflow.
+See the synthetic [example bundles](../examples/releases/README.md).
