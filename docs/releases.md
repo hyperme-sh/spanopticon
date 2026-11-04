@@ -19,8 +19,9 @@ python3 scripts/check_release.py \
 
 Both files are required. The gate never silently substitutes the PR base or HEAD
 for the last accepted release, and has no skip/waiver switch. Initial bootstrap
-must be explicitly reviewed and recorded as an immutable accepted bundle before
-subsequent releases can use this check.
+must be produced from tested artifacts, validated contracts and recorded provenance,
+then recorded as an immutable accepted bundle before subsequent releases can use
+this check. Bootstrap does not require a human approval step.
 
 ## Compatibility rules
 
@@ -58,19 +59,19 @@ provenance. Breaking behavior with an unchanged schema must still fail those tes
    artifact digest, exported API snapshot and successful consumer qualification.
 2. Assemble the complete candidate bundle for one release line. Pin every artifact;
    do not resolve `latest` or floating tags during promotion.
-3. Retrieve the last accepted bundle from a protected immutable release revision,
+3. Retrieve the last accepted bundle from an immutable release revision,
    independently of candidate-controlled data. Run the policy gate and cross-service
    consumer tests. Require both checks before publishing/promoting a release.
-4. Publish the accepted bundle and artifacts only through the protected release
-   workflow. Restrict tag/release updates and require reviewed changes to release
-   policy, baseline selection and CI workflows.
+4. Publish the accepted bundle and artifacts through the automated release
+   workflow after the exact artifact and compatibility checks pass. Use a fixed
+   baseline revision selected independently of candidate input.
 5. Render deployment configuration from that accepted bundle. Verify registry
    provenance, environment configuration and rollback compatibility before applying.
 
 This repository supplies the gate and reusable CI wiring. Adding the files does
-not enable checks or release protection in every component repository. Roll out
-required checks, version changes and artifact provenance in each owner before
-claiming fleet-wide enforcement. A manual image-only template is not a coordinated
+not connect publication to validation in every component repository. Connect the
+automated checks to each publisher, align versions and verify artifact provenance
+before claiming pipeline enforcement. A manual image-only template is not a coordinated
 release and must not be used to bypass the production promotion gate.
 
 
@@ -107,15 +108,15 @@ Supply `baseline-ref` as the full immutable commit of the **last accepted releas
 in that repository, plus optional `baseline-manifest` and `candidate-manifest`
 paths. The default paths are `releases/accepted/release.json` and
 `releases/candidate/release.json`. The baseline and candidate need not have the
-same path. It must be a protected release-owner decision which commit is accepted;
-a caller-controlled SHA alone is not proof of acceptance.
+same path. Select the accepted commit from recorded successful release evidence,
+independently of candidate input; a caller-controlled SHA alone is not acceptance.
 
 The workflow reads only the caller repository and pinned public policy code. It
 accepts no secrets, runs on hosted Ubuntu and never executes scripts from the
 candidate bundle. Require its `compatibility` job together with artifact and
-consumer tests before release promotion. Protect the caller workflow and baseline
-selection from unreviewed changes. Do not publish a release merely because these
-metadata checks pass.
+consumer tests as automated publication dependencies. Do not publish a release
+merely because these metadata checks pass. No human approval is required by this
+pipeline.
 
 The public CI also calls this reusable workflow against the synthetic example
 bundles and checks that its pinned policy code matches the reviewed source. When
@@ -132,7 +133,7 @@ Each owner keeps `release-policy.json` with `schema_version: 1`, its exact
 `repository` and `component` name, `line: "0.24"`, and a nonempty `version_files`
 list of its owning `pyproject.toml` or `package.json` files. Its caller workflow
 pins `component-release.yml` by full SHA and passes the agreed line. Repository
-variable `SPANOPTICON_RELEASE_BASELINE_SHA` must point to a reviewed immutable
+variable `SPANOPTICON_RELEASE_BASELINE_SHA` must point to an immutable
 commit containing `releases/accepted/release.json` and its real contracts/artifact
 metadata. Submit the actual next bundle at `releases/candidate/release.json`.
 
@@ -145,10 +146,15 @@ bundle policy still checks immutable artifacts, patch contracts and minor/major
 compatibility. Artifact provenance and owning consumer tests remain separate
 required checks; this workflow never publishes artifacts or deploys anything.
 
-Required-check protection and publisher dependencies must be configured before
-calling this mandatory enforcement. A workflow file cannot prevent an authorized
-person from manually publishing a release outside that workflow. If the GitHub
-plan does not support required checks on private repositories, report that as an
-unresolved enforcement prerequisite; do not make repositories public or silently
-claim the setup is protected. Keep release publication blocked until a real
-baseline and all owner qualifications exist.
+Publication must depend on successful automated compatibility, artifact and
+consumer checks for the exact release. This is pipeline validation, not a GitHub
+merge restriction or human approval prerequisite. Do not add required reviewers,
+branch protections, approval rulesets, environment approvals, CODEOWNERS approval
+requirements, or release/deployment approval gates unless the user explicitly
+requests that specific change. This applies to production releases too. Advisory
+reviews and automated tests remain welcome.
+
+A workflow cannot prevent an authorized person from publishing outside that
+workflow; describe enforcement as applying to the configured pipeline. GitHub
+plan upgrades and branch protection are not adoption prerequisites. Real accepted
+baselines and automated artifact/consumer qualification remain necessary.
