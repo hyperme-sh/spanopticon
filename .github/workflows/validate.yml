@@ -15,6 +15,11 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false
+      - name: Install deployment parser in an isolated environment
+        run: |
+          python3 -m venv "$RUNNER_TEMP/deployment-python"
+          "$RUNNER_TEMP/deployment-python/bin/pip" install --disable-pip-version-check -r requirements-deployment.txt
+          echo "$RUNNER_TEMP/deployment-python/bin" >> "$GITHUB_PATH"
       - run: python3 scripts/check-version-policy.py
       - run: python3 -m unittest discover -s tests -v
       - name: Verify the reusable workflow executes the tested policy
@@ -52,3 +57,47 @@ jobs:
       baseline-ref: ba386cd5fca08d68604a5c992a09c454c1102d4f
       baseline-manifest: examples/releases/accepted/release.json
       candidate-manifest: examples/releases/candidate/release.json
+
+  deployment-runtime:
+    name: Compose and Helm test runtime
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      KIND_NAME: spanopticon-ci-${{ github.run_id }}-${{ github.run_attempt }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - name: Install isolated deployment test tools
+        run: |
+          python3 -m venv "$RUNNER_TEMP/deployment-python"
+          "$RUNNER_TEMP/deployment-python/bin/pip" install --disable-pip-version-check -r requirements-deployment.txt
+          python3 scripts/install_deployment_test_tools.py --output "$RUNNER_TEMP/deployment-tools"
+          echo "$RUNNER_TEMP/deployment-python/bin" >> "$GITHUB_PATH"
+          echo "$RUNNER_TEMP/deployment-tools" >> "$GITHUB_PATH"
+          mkdir "$RUNNER_TEMP/deployment-receipts"
+          echo "KUBECONFIG=$RUNNER_TEMP/spanopticon-kubeconfig" >> "$GITHUB_ENV"
+      - name: Qualify disposable Compose runtime
+        run: python3 scripts/check_deployment_runtime.py --engine compose --context default --receipt "$RUNNER_TEMP/deployment-receipts/compose.json"
+      - name: Create disposable Kubernetes cluster
+        run: kind create cluster --name "$KIND_NAME" --image kindest/node:v1.37.0@sha256:a1ed56cfb0e7b93589bdf97c8cd566405a265939e3620fc4f5de89adff580ae5 --wait 120s
+      - name: Pull the exact Compose-qualified image in the disposable cluster
+        run: |
+          image=$(python3 -c 'from scripts.check_deployment_runtime import IMAGE; print(IMAGE)')
+          docker exec "$KIND_NAME-control-plane" crictl pull "$image"
+      - name: Qualify Helm install and upgrade
+        run: python3 scripts/check_deployment_runtime.py --engine helm --context "kind-$KIND_NAME" --receipt "$RUNNER_TEMP/deployment-receipts/helm.json"
+      - name: Remove only the disposable cluster
+        if: always()
+        run: |
+          if command -v kind >/dev/null; then
+            kind delete cluster --name "$KIND_NAME"
+          fi
+      - name: Retain native qualification receipts
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: deployment-runtime-receipts
+          path: ${{ runner.temp }}/deployment-receipts/*.json
+          if-no-files-found: error
+          retention-days: 90

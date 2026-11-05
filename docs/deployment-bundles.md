@@ -2,9 +2,11 @@
 
 A deployment bundle binds one candidate's component image references to its
 Compose and Helm artifacts. It is separate from the template archive published
-by the current test-bundle workflow. The initial implementation verifies local
-OCI blobs and writes a lock; GHCR publication/resolution, chart generation,
-installation and runtime qualification are tracked in [#20](https://github.com/hyperme-sh/spanopticon/issues/20).
+by the current test-bundle workflow. The content verifier checks local OCI blobs and writes a lock.
+[The test deployment tools](test-deployment.md) now provide GHCR fetching,
+one-time test-channel resolution, local assembly and Compose/Helm consumers.
+Fleet publication, chart generation and service-specific runtime qualification
+remain tracked in [#20](https://github.com/hyperme-sh/spanopticon/issues/20).
 
 ## Verify downloaded content
 
@@ -88,7 +90,7 @@ that promotion occurred. The production deployment path must reject an unpromote
 test selection, never fall back to the test channel, and verify its authorization
 before executing any deployment. No production selector exists in this change.
 
-Next steps are authenticated GHCR transport and channel selection, bundle assembly,
-Compose/Helm consumers, dependency/migration validation, disposable deployment
-smoke tests, rollback and observed runtime receipts. The verifier must not be
-used as a substitute for those checks.
+Use [the test deployment tools](test-deployment.md) for the supported fetch and
+runtime paths. Real fleet assembly/publication, dependency/migration validation,
+provider acceptance and production selection remain separate. The verifier must
+not be used as a substitute for those checks.

@@ -1,0 +1,2 @@
+# Parsing rendered Helm manifests; the OCI verifier and fetcher remain stdlib-only.
+PyYAML==6.0.3
