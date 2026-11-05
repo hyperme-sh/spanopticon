@@ -10,6 +10,7 @@ import tomllib
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from release.policy import PolicyError, contract_path, json_document, require, validate, version
+from release.accepted import verify_accepted_record
 
 
 def configuration(root, repository, line):
@@ -53,6 +54,7 @@ def release_required(current, previous, repository, line):
 def admit(current, baseline, repository, line, requested_version=None):
     config, versions = configuration(current, repository, line)
     accepted = contract_path(Path(baseline).resolve(), 'releases/accepted/release.json')
+    verify_accepted_record(baseline, repository, required=True)
     candidate = contract_path(Path(current).resolve(), 'releases/candidate/release.json')
     bundle = validate(accepted, candidate)
     require(bundle['line'] == line, 'Candidate is outside the synchronized release line')
@@ -77,9 +79,14 @@ def main():
     parser.add_argument('--baseline-ref')
     parser.add_argument('--requested-version')
     parser.add_argument('--configuration-only', action='store_true')
+    parser.add_argument('--verify-accepted-record', action='store_true')
     args = parser.parse_args()
     try:
-        if args.configuration_only:
+        if args.verify_accepted_record:
+            accepted = verify_accepted_record(args.repository_root, args.repository)
+            print('Accepted stable release verified: ' + accepted if accepted else
+                  'No accepted stable release recorded; development snapshots do not reserve stable versions.')
+        elif args.configuration_only:
             require(args.previous_source is not None, 'Previous source checkout required')
             needed = release_required(args.repository_root, args.previous_source, args.repository, args.line)
             output = f'release-required={str(needed).lower()}\n'

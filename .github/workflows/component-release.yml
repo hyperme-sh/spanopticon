@@ -39,10 +39,13 @@ jobs:
           path: policy
           persist-credentials: false
       - id: inspect
+        name: Verify stable baseline classification and inspect configuration
         env:
           OWNER_REPOSITORY: ${{ github.repository }}
           RELEASE_LINE: ${{ inputs.release-line }}
+          GH_TOKEN: ${{ github.token }}
         run: |
+          python3 policy/scripts/component_release.py --repository-root candidate --repository "$OWNER_REPOSITORY" --line "$RELEASE_LINE" --verify-accepted-record
           python3 policy/scripts/component_release.py --repository-root candidate --previous-source previous-source --repository "$OWNER_REPOSITORY" --line "$RELEASE_LINE" --configuration-only
   admission:
     name: Release compatibility
@@ -81,5 +84,7 @@ jobs:
           path: policy
           persist-credentials: false
       - name: Check contracts, package versions and the requested release
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           python3 policy/scripts/component_release.py --repository-root candidate --baseline-root accepted --baseline-ref "$BASELINE_REF" --repository "$OWNER_REPOSITORY" --line "$RELEASE_LINE" --requested-version "$REQUESTED_VERSION"
