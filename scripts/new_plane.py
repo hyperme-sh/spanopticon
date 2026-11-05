@@ -4,24 +4,31 @@ import argparse
 import json
 from pathlib import Path
 import re
+import sys
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from assurance import load, settings
 
 NAME = re.compile(r"[a-z](?:[a-z0-9-]{0,61}[a-z0-9])?\Z")
 IMAGE = re.compile(r"[a-z0-9][a-z0-9._:/-]*@sha256:[0-9a-f]{64}\Z")
 
 
-def manifests(name, image):
+def manifests(name, image, assurance=None):
+    environment, secrets = settings(assurance)
     if not NAME.fullmatch(name):
         raise ValueError("name must be a lowercase DNS label of 1 to 63 characters starting with a letter")
     if not IMAGE.fullmatch(image):
         raise ValueError("image must be an image reference with a lowercase SHA-256 digest")
     labels = {"app.kubernetes.io/name": name}
     compose = {"name": name, "services": {name: {
+        "environment": environment, "secrets": list(secrets),
         "image": image, "user": "65532:65532", "read_only": True,
         "cap_drop": ["ALL"], "security_opt": ["no-new-privileges:true"],
         "tmpfs": ["/tmp:rw,noexec,nosuid,size=64m,mode=1777"],
         "ports": ["127.0.0.1:8080:8080"], "init": True,
         "cpus": 1.0, "mem_limit": "512m", "pids_limit": 256,
     }}}
+    compose["secrets"] = {name: {"external": True} for name in secrets}
     items = [
         {"apiVersion": "v1", "kind": "Namespace", "metadata": {"name": name}},
         {"apiVersion": "apps/v1", "kind": "Deployment",
@@ -52,12 +59,21 @@ def manifests(name, image):
          "metadata": {"name": name + "-default-deny", "namespace": name},
          "spec": {"podSelector": {"matchLabels": labels}, "policyTypes": ["Ingress", "Egress"]}},
     ]
+    pod = items[1]["spec"]["template"]["spec"]
+    container = pod["containers"][0]
+    container["env"] = [{"name": key, "value": value} for key, value in environment.items()]
+    for secret in secrets:
+        volume = "assurance-" + str(len(pod["volumes"]))
+        pod["volumes"].append({"name": volume, "secret": {"secretName": secret,
+            "optional": False, "items": [{"key": "token", "path": secret}], "defaultMode": 288}})
+        container["volumeMounts"].append({"name": volume, "mountPath": "/run/secrets/" + secret,
+            "subPath": secret, "readOnly": True})
     return {"compose.yaml": compose,
             "kubernetes.json": {"apiVersion": "v1", "kind": "List", "items": items}}
 
 
-def generate(name, image, output):
-    data = manifests(name, image)
+def generate(name, image, output, assurance=None):
+    data = manifests(name, image, assurance)
     output = Path(output).absolute()
     # mkdir is an exclusive reservation: refuse directories, files and symlinks.
     # Do not replace another operator's path, even an empty directory.
@@ -75,9 +91,10 @@ def main():
     parser.add_argument("name")
     parser.add_argument("--image", required=True)
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--assurance-config", type=Path, required=True)
     args = parser.parse_args()
     try:
-        result = generate(args.name, args.image, args.output)
+        result = generate(args.name, args.image, args.output, load(args.assurance_config))
     except (ValueError, OSError) as error:
         parser.exit(2, f"error: {error}\n")
     print(result)
