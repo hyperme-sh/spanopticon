@@ -197,8 +197,8 @@ currently supports package distributions, not OCI runtime deployment.
 
 Initial admission is a separate job, not a claim of backward compatibility. The
 updated package publisher must recognize that job, verify the exact successful
-main artifact and immutable test release, bind the candidate digest to those
-bytes, and recheck stable history before publication. It atomically creates
+main Actions artifact, bind the candidate digest to those bytes, independently
+rerun policy, and recheck stable history before publication. It atomically creates
 `refs/heads/release/initial-stable` at the admitted source. This durable claim
 prevents competing source revisions from both publishing a first stable release;
 the same source may retry. It adds no reviewer, branch protection or repository
