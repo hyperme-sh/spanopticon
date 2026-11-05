@@ -49,7 +49,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           repository: hyperme-sh/spanopticon
-          ref: 69f14112ebae2335a7c832b6affac78ad67417f8
+          ref: eac85eed49d507519d6577ce6a818042c32f65c9
           path: policy
           persist-credentials: false
       - name: Keep the public policy pin aligned with reviewed code
