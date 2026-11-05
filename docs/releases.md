@@ -21,6 +21,17 @@ or unavailable verification fail stable admission closed. First stable release
 bootstrap remains a separate explicit release operation; development snapshots
 must not be installed as a substitute baseline.
 
+Package acceptance binds the component's artifact digest to a stable release
+attachment. A container's OCI manifest digest differs from a tarball's file hash:
+container acceptance instead requires `container_provenance_asset` in the accepted
+provenance. That stable attachment must be covered by the live release's asset
+digest and contain `schema_version: 1`, the exact `repository`, source `revision`,
+component `version` and complete `artifact` object (kind, image URI and manifest
+SHA-256). The guard verifies its bytes before reading those fields. Registry
+existence, image production and runtime consumer checks remain owning-pipeline
+requirements. Downloads use the fixed GitHub API origin and pass no API credential
+to its signed release-asset CDN redirect.
+
 A release bundle records the line, complete component membership, each component's
 version, immutable artifact identity and digest-bound API snapshot. Keep private
 component inventories and their snapshots in private release repositories. The

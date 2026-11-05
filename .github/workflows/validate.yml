@@ -19,7 +19,7 @@ jobs:
       - name: Verify the reusable workflow executes the tested policy
         run: |
           set -euo pipefail
-          policy_ref=2946581954f27dd7bb7955d5eb3fa124b07fead9
+          policy_ref=c0b76ff1f409712fd1182daadb76e390e8c455a1
           git fetch --no-tags --depth=1 origin "$policy_ref"
           for path in scripts/component_release.py release/accepted.py release/policy.py; do
             git show "$policy_ref:$path" | cmp - "$path"
