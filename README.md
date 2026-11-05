@@ -23,6 +23,10 @@ python3 scripts/new_plane.py example-plane \
 Replace the example image and digest with a qualified application artifact.
 The image must implement the [runtime contract](docs/runtime-contract.md).
 
+For the deployment-bundle content contract and offline verification command, see
+[deployment bundles](docs/deployment-bundles.md). Registry transport and runnable
+Compose/Helm bundles are still being implemented.
+
 Run local checks with `python3 -m unittest discover -s tests -v`.
 Python 3.11 or newer is required; the generator has no third-party dependencies.
 
