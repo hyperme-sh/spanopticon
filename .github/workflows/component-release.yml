@@ -35,7 +35,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           repository: hyperme-sh/spanopticon
-          ref: 8f698c4e4808cfd0727859b61f071b204c449eda
+          ref: 7f5b9b21363d41b8f8ed14571195d10f4a11899f
           path: policy
           persist-credentials: false
       - id: inspect
@@ -50,7 +50,7 @@ jobs:
   admission:
     name: Release compatibility
     needs: configuration
-    if: github.event_name != 'pull_request' || needs.configuration.outputs.release-required == 'true'
+    if: inputs.baseline-ref != '' && (github.event_name != 'pull_request' || needs.configuration.outputs.release-required == 'true')
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     env:
@@ -80,7 +80,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           repository: hyperme-sh/spanopticon
-          ref: 8f698c4e4808cfd0727859b61f071b204c449eda
+          ref: 7f5b9b21363d41b8f8ed14571195d10f4a11899f
           path: policy
           persist-credentials: false
       - name: Check contracts, package versions and the requested release
@@ -88,3 +88,35 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           python3 policy/scripts/component_release.py --repository-root candidate --baseline-root accepted --baseline-ref "$BASELINE_REF" --repository "$OWNER_REPOSITORY" --line "$RELEASE_LINE" --requested-version "$REQUESTED_VERSION"
+
+  initial:
+    name: Initial release admission
+    needs: configuration
+    if: inputs.baseline-ref == '' && (github.event_name != 'pull_request' || needs.configuration.outputs.release-required == 'true')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.sha }}
+          path: candidate
+          persist-credentials: false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: hyperme-sh/spanopticon
+          ref: 7f5b9b21363d41b8f8ed14571195d10f4a11899f
+          path: policy
+          persist-credentials: false
+      - name: Validate first declaration and absence of stable history
+        env:
+          OWNER_REPOSITORY: ${{ github.repository }}
+          RELEASE_LINE: ${{ inputs.release-line }}
+          REQUESTED_VERSION: ${{ inputs.requested-version }}
+          EVENT_NAME: ${{ github.event_name }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [[ "$EVENT_NAME" != pull_request && -z "$REQUESTED_VERSION" ]]; then
+            echo 'A release/tag version is required' >&2
+            exit 1
+          fi
+          python3 policy/scripts/component_release.py --repository-root candidate --repository "$OWNER_REPOSITORY" --line "$RELEASE_LINE" --requested-version "$REQUESTED_VERSION" --initial-release
