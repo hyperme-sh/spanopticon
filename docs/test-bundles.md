@@ -34,7 +34,10 @@ never overwritten or deleted automatically. Original Actions artifacts must be
 available during promotion (90-day requested retention, subject to repository
 retention). Missing or expired evidence requires fresh qualification.
 
-The older `vMAJOR.MINOR.PATCH` package publisher remains separate. A test bundle
-must not be recorded as an accepted component-package baseline. Python package
+The former template `vMAJOR.MINOR.PATCH` publisher is removed; this repository
+uses the explicit gold-selection path for stable bundles. Component repositories
+with a `release-policy.json` may publish test bundles but cannot promote them as
+stable bundles: their package admission remains separate. A test bundle must not
+be recorded as an accepted component-package baseline. Python package
 versions are not renamed to `test.N`, and promoting a bundle does not relabel wheel
 metadata. This preserves the exact dependencies and bytes that were tested.

@@ -28,7 +28,7 @@ jobs:
       actions: read
     steps:
       - name: Publish qualified test or explicitly selected gold bundle
-        uses: hyperme-sh/.github/actions/bundle-channel@141019b0e52f814b80223e0e8d3ced26a9111b9b
+        uses: hyperme-sh/.github/actions/bundle-channel@769d7a1ae1e7aa13b502370f4f303a5b11b8f5c9
         with:
           mode: ${{ github.event_name == 'workflow_run' && 'test' || 'promote' }}
           token: ${{ github.token }}
