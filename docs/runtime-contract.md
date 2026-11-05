@@ -33,7 +33,9 @@ Stripe API key. Verification uses its own owner service.
 
 The image must consume `SPANOPTICON_ASSURANCE_MODE`,
 `SPANOPTICON_STRIPE_KYC_URL` / `SPANOPTICON_VERIFICATION_URL` and the corresponding
-`*_TOKEN_FILE` paths. Compose resolves externally provisioned secrets; Kubernetes
+`*_TOKEN_FILE` paths. Compose requires `SPANOPTICON_SECRET_<SECRET_NAME>_FILE` (uppercase, hyphens
+replaced by underscores) to point to an operator-provisioned file readable by
+UID 65532. An absent or empty path fails Compose interpolation. Kubernetes
 requires a Secret with a `token` key for each configured credential. Mounts are
 read-only. Rotate mounted Kubernetes subPath secrets by restarting the workload.
 These settings are a plane-adapter contract, not existing payment-service flags.

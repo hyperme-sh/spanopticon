@@ -12,7 +12,8 @@ Inspect `compose.yaml`, configure required service settings through a separate
 Compose override and validate the result:
 
 ```sh
-docker compose -f example-plane/compose.yaml config --quiet
+SPANOPTICON_SECRET_STRIPE_KYC_CLIENT_FILE=/secure/stripe-kyc-client \
+  docker compose -f example-plane/compose.yaml config --quiet
 ```
 
 The default port binds only to loopback (`127.0.0.1:8080`). Starting the workload

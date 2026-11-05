@@ -28,13 +28,13 @@ jobs:
       - name: Validate generated Compose configuration
         run: |
           python3 scripts/new_plane.py example --image registry.example.org/team/plane@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa --assurance-config examples/assurance/stripe-kyc.json --output "$RUNNER_TEMP/plane-example"
-          docker compose -f "$RUNNER_TEMP/plane-example/compose.yaml" config --quiet
+          SPANOPTICON_SECRET_STRIPE_KYC_CLIENT_FILE=/dev/null docker compose -f "$RUNNER_TEMP/plane-example/compose.yaml" config --quiet
       - name: Check and render a synthetic coordinated release
         run: |
           python3 scripts/check_release.py --previous examples/releases/accepted/release.json --candidate examples/releases/candidate/release.json
           python3 scripts/render_release.py --previous examples/releases/accepted/release.json --candidate examples/releases/candidate/release.json --assurance-config examples/assurance/stripe-kyc.json --output "$RUNNER_TEMP/release-example"
-          docker compose -f "$RUNNER_TEMP/release-example/api/compose.yaml" config --quiet
-          docker compose -f "$RUNNER_TEMP/release-example/worker/compose.yaml" config --quiet
+          SPANOPTICON_SECRET_STRIPE_KYC_CLIENT_FILE=/dev/null docker compose -f "$RUNNER_TEMP/release-example/api/compose.yaml" config --quiet
+          SPANOPTICON_SECRET_STRIPE_KYC_CLIENT_FILE=/dev/null docker compose -f "$RUNNER_TEMP/release-example/worker/compose.yaml" config --quiet
       - name: Validate the template distribution
         run: bash scripts/check-archive.sh
       - name: Retain validated template bytes

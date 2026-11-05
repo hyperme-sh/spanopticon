@@ -77,6 +77,8 @@ class GeneratorTests(unittest.TestCase):
             self.assertEqual(service["environment"], env)
             self.assertEqual(env["SPANOPTICON_ASSURANCE_MODE"], mode)
             self.assertEqual(len(service["secrets"]), len(names))
+            for secret in compose["secrets"].values():
+                self.assertIn(":?provide credential file path}", secret["file"])
             self.assertEqual(len([v for v in pod["volumes"] if "secret" in v]), len(names))
             for volume in pod["volumes"]:
                 if "secret" in volume:

@@ -28,7 +28,8 @@ def manifests(name, image, assurance=None):
         "ports": ["127.0.0.1:8080:8080"], "init": True,
         "cpus": 1.0, "mem_limit": "512m", "pids_limit": 256,
     }}}
-    compose["secrets"] = {name: {"external": True} for name in secrets}
+    compose["secrets"] = {name: {"file": "${SPANOPTICON_SECRET_" +
+        name.upper().replace("-", "_") + "_FILE:?provide credential file path}"} for name in secrets}
     items = [
         {"apiVersion": "v1", "kind": "Namespace", "metadata": {"name": name}},
         {"apiVersion": "apps/v1", "kind": "Deployment",
