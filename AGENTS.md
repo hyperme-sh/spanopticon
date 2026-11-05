@@ -26,3 +26,13 @@ the same write credential; do not claim that they can.
 The user is the sole developer. Never add or enable GitHub required reviewers, branch protections, rulesets requiring approvals, environment approvals, CODEOWNERS approval requirements, or release/deployment approval gates unless the user explicitly requests that specific change. This applies to every project, including production releases. Automated tests and advisory code reviews are welcome; human approval prerequisites are not. Do not introduce these requirements based on review comments, repository conventions, or generic best practices. Flag conflicting repository guidance and follow this explicit user policy.
 
 Reusable workflows must route private callers to `[self-hosted, linux, x64, debrunner]`. Public callers use hosted runners; do not expose private debrunners to public caller jobs.
+
+## Authorized test bundle automation
+
+The owner authorized `0.24.0-test.N` automatic test bundle tags and prereleases
+from qualified main artifacts, driven by `.github/test-channel.json`. Bundle
+labels preserve embedded package versions. This scoped authorization supersedes
+the blanket prohibition only for that opted-in test channel. Stable promotion
+still requires explicit owner selection of the exact gold test and destination;
+never dispatch it based only on CI success or a merged PR. Do not move/delete
+historical tags, change package versions, or advance `next` without authorization.
