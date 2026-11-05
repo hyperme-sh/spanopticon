@@ -81,10 +81,10 @@ jobs:
         run: python3 scripts/check_deployment_runtime.py --engine compose --context default --receipt "$RUNNER_TEMP/deployment-receipts/compose.json"
       - name: Create disposable Kubernetes cluster
         run: kind create cluster --name "$KIND_NAME" --image kindest/node:v1.37.0@sha256:a1ed56cfb0e7b93589bdf97c8cd566405a265939e3620fc4f5de89adff580ae5 --wait 120s
-      - name: Load the exact Compose-qualified image into the disposable cluster
+      - name: Pull the exact Compose-qualified image in the disposable cluster
         run: |
           image=$(python3 -c 'from scripts.check_deployment_runtime import IMAGE; print(IMAGE)')
-          kind load docker-image "$image" --name "$KIND_NAME"
+          docker exec "$KIND_NAME-control-plane" crictl pull "$image"
       - name: Qualify Helm install and upgrade
         run: python3 scripts/check_deployment_runtime.py --engine helm --context "kind-$KIND_NAME" --receipt "$RUNNER_TEMP/deployment-receipts/helm.json"
       - name: Remove only the disposable cluster
