@@ -103,14 +103,60 @@ def same_json(left, right):
         right, sort_keys=True, separators=(',', ':'), allow_nan=False)
 
 
+def additive_python_modules(old, new):
+    """Accept only extra ordinary modules in already-existing Python packages.
+
+    Complete byte manifests remain authoritative: no existing runtime byte,
+    package initializer, coverage declaration or manifest field may change.
+    Consumer tests are still required; this is not semantic/provider acceptance.
+    """
+    fields = {'schema_version', 'coverage', 'packaged_file_sha256'}
+    if not isinstance(old, dict) or not isinstance(new, dict):
+        return False
+    if set(old) != fields or set(new) != fields or old['schema_version'] != 1 or new['schema_version'] != 1:
+        return False
+    if old['coverage'] != new['coverage'] or not isinstance(old['coverage'], str):
+        return False
+    before, after = old['packaged_file_sha256'], new['packaged_file_sha256']
+    if not isinstance(before, dict) or not before or not isinstance(after, dict):
+        return False
+    for files in (before, after):
+        for name, digest in files.items():
+            if not isinstance(name, str) or not isinstance(digest, str) or not DIGEST.fullmatch(digest):
+                return False
+            parts = name.split('/')
+            if len(parts) < 2 or any(not part.isidentifier() or not part.isascii() for part in parts[:-1]):
+                return False
+            if parts[-1] in {'', '.', '..'} or '\\' in name:
+                return False
+    if any(after.get(name) != digest for name, digest in before.items()):
+        return False
+    added = set(after) - set(before)
+    if not added or len({name.casefold() for name in after}) != len(after):
+        return False
+    for name in added:
+        parent, leaf = name.rsplit('/', 1)
+        stem = leaf.removesuffix('.py')
+        if not leaf.endswith('.py') or not stem.isidentifier() or not stem.isascii() or stem.startswith('__'):
+            return False
+        if parent + '/__init__.py' not in before:
+            return False
+        if any(existing.startswith(parent + '/' + stem + '/') for existing in before):
+            return False
+    return True
+
+
 def compatible(old, new):
     """Conservative minor gate: only wholly new OpenAPI operations/schemas.
 
     Existing operations, schemas, auth, servers and all other fields must remain
-    exactly equal. Other contract formats must remain equal until their own
+    exactly equal. Complete Python byte manifests may add ordinary modules in existing packages.
+    Other contract formats must remain equal until their own
     compatibility checker is implemented; unknown changes never pass by default.
     """
     if same_json(old, new):
+        return True
+    if additive_python_modules(old, new):
         return True
     if not (isinstance(old.get('openapi'), str) and old.get('openapi') == new.get('openapi')):
         return False
