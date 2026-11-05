@@ -48,3 +48,12 @@ Repository immutable releases must be enabled. Promotion verifies the original
 successful Actions artifact, not just release metadata, and must occur before
 that artifact expires (90-day requested retention). Expired evidence requires a
 new validated main revision. No deployment credentials or reviewer gate are used.
+
+### Additive Python module releases
+
+For complete `packaged_file_sha256` runtime manifests, a minor release may add
+ordinary Python modules within an existing package. Every existing file hash and
+all other contract fields must remain unchanged. New package initializers, entry
+points, native/data files, case collisions, package shadowing and new namespaces
+are rejected. Patch releases still require identical contracts. Consumer tests
+remain necessary; byte compatibility does not establish live provider behavior.
