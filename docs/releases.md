@@ -184,3 +184,29 @@ A workflow cannot prevent an authorized person from publishing outside that
 workflow; describe enforcement as applying to the configured pipeline. GitHub
 plan upgrades and branch protection are not adoption prerequisites. Real accepted
 baselines and automated artifact/consumer qualification remain necessary.
+
+### First stable package publication
+
+An owner without a stable release may use initial declaration admission instead
+of inventing an accepted baseline. With an empty baseline ref, the component
+workflow validates the explicit candidate, package versions, contract digests and
+requested tag, and checks every page of live GitHub release history. Any stable
+release, draft stable release, unknown classification or unavailable history
+blocks this path. Test prereleases remain qualification evidence only. This path
+currently supports package distributions, not OCI runtime deployment.
+
+Initial admission is a separate job, not a claim of backward compatibility. The
+updated package publisher must recognize that job, verify the exact successful
+main Actions artifact, bind the candidate digest to those bytes, independently
+rerun policy, and recheck stable history before publication. It atomically creates
+`refs/heads/release/initial-stable` at the admitted source. This durable claim
+prevents competing source revisions from both publishing a first stable release;
+the same source may retry. It adds no reviewer, branch protection or repository
+approval setting. A failed attempt that leaves a draft or needs a different source
+requires explicit repair of that unpublished attempt; never move a claim past a
+published release.
+
+After successful publication, record actual immutable stable provenance and
+select its baseline commit. Subsequent releases use normal compatibility
+admission. An older publisher rejects the new initial-admission job, so deploy
+the publisher and owning workflow updates together before making a first tag.

@@ -9,8 +9,8 @@ import sys
 import tomllib
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from release.policy import PolicyError, contract_path, json_document, require, validate, version
-from release.accepted import verify_accepted_record
+from release.policy import PolicyError, contract_path, json_document, require, validate, version, load_bundle
+from release.accepted import verify_accepted_record, github_json, REPOSITORY
 
 
 def configuration(root, repository, line):
@@ -69,6 +69,32 @@ def admit(current, baseline, repository, line, requested_version=None):
     return component['version']
 
 
+def admit_initial(current, repository, line, requested_version=None, *, fetch=None):
+    """Validate a first declaration; publisher still binds tested bytes and serializes."""
+    require(REPOSITORY.fullmatch(repository), 'Invalid repository identity')
+    config, versions = configuration(current, repository, line)
+    require(not (Path(current) / 'releases/accepted').exists(),
+            'Initial admission cannot replace an accepted record')
+    bundle, _ = load_bundle(contract_path(Path(current).resolve(), 'releases/candidate/release.json'))
+    require(bundle['line'] == line, 'Candidate is outside the synchronized release line')
+    require(set(bundle['components']) == {config['component']}, 'Owner candidate must contain exactly its component')
+    component = bundle['components'][config['component']]
+    require(component['artifact']['kind'] == 'package', 'Initial admission currently supports package distributions only')
+    require(all(v == component['version'] for v in versions.values()), 'Candidate version differs from an owning package version')
+    if requested_version:
+        require(component['version'] == requested_version.removeprefix('v'), 'Requested release/tag version differs from candidate')
+    fetch = fetch or (lambda path: github_json(path, document_type=list))
+    for page in range(1, 101):
+        releases = fetch(f'repos/{repository}/releases?per_page=100&page={page}')
+        require(isinstance(releases, list) and len(releases) <= 100, 'Incomplete release inventory')
+        for release in releases:
+            require(isinstance(release, dict) and release.get('prerelease') is True,
+                    'Stable release exists or release classification is unknown; an accepted baseline is required')
+        if len(releases) < 100:
+            return component['version']
+    raise PolicyError('Release inventory exceeds initial-admission limit')
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--repository-root', type=Path, required=True)
@@ -79,6 +105,7 @@ def main():
     parser.add_argument('--baseline-ref')
     parser.add_argument('--requested-version')
     parser.add_argument('--configuration-only', action='store_true')
+    parser.add_argument('--initial-release', action='store_true')
     parser.add_argument('--verify-accepted-record', action='store_true')
     args = parser.parse_args()
     try:
@@ -95,6 +122,10 @@ def main():
                     stream.write(output)
             print(output.strip())
             print('Configuration checked only; this is not release acceptance.')
+        elif args.initial_release:
+            require(not args.baseline_ref and args.baseline_root is None, 'Initial admission cannot override a selected baseline')
+            admitted = admit_initial(args.repository_root, args.repository, args.line, args.requested_version)
+            print(f'{args.repository} {admitted}: initial declaration admitted; no compatibility claim or publication acceptance')
         else:
             require(isinstance(args.baseline_ref, str) and re.fullmatch('[0-9a-f]{40}', args.baseline_ref),
                     'Set SPANOPTICON_RELEASE_BASELINE_SHA to the immutable reviewed accepted-bundle commit; bootstrap is required')
