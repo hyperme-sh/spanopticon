@@ -17,7 +17,9 @@ permissions:
 jobs:
   configuration:
     name: Configuration only (not release acceptance)
-    runs-on: ubuntu-24.04
+    runs-on:
+      group: shared-local
+      labels: [self-hosted, linux, x64]
     timeout-minutes: 5
     outputs:
       release-required: ${{ steps.inspect.outputs.release-required }}
@@ -51,7 +53,9 @@ jobs:
     name: Release compatibility
     needs: configuration
     if: inputs.baseline-ref != '' && (github.event_name != 'pull_request' || needs.configuration.outputs.release-required == 'true')
-    runs-on: ubuntu-24.04
+    runs-on:
+      group: shared-local
+      labels: [self-hosted, linux, x64]
     timeout-minutes: 5
     env:
       BASELINE_REF: ${{ inputs.baseline-ref }}
@@ -93,7 +97,9 @@ jobs:
     name: Initial release admission
     needs: configuration
     if: inputs.baseline-ref == '' && (github.event_name != 'pull_request' || needs.configuration.outputs.release-required == 'true')
-    runs-on: ubuntu-24.04
+    runs-on:
+      group: shared-local
+      labels: [self-hosted, linux, x64]
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
