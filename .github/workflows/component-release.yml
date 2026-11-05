@@ -35,14 +35,17 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           repository: hyperme-sh/spanopticon
-          ref: eac85eed49d507519d6577ce6a818042c32f65c9
+          ref: 251a9c27e101851d814f5266e31993bf9d283c6f
           path: policy
           persist-credentials: false
       - id: inspect
+        name: Verify stable baseline classification and inspect configuration
         env:
           OWNER_REPOSITORY: ${{ github.repository }}
           RELEASE_LINE: ${{ inputs.release-line }}
+          GH_TOKEN: ${{ github.token }}
         run: |
+          python3 policy/scripts/component_release.py --repository-root candidate --repository "$OWNER_REPOSITORY" --line "$RELEASE_LINE" --verify-accepted-record
           python3 policy/scripts/component_release.py --repository-root candidate --previous-source previous-source --repository "$OWNER_REPOSITORY" --line "$RELEASE_LINE" --configuration-only
   admission:
     name: Release compatibility
@@ -77,9 +80,11 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           repository: hyperme-sh/spanopticon
-          ref: eac85eed49d507519d6577ce6a818042c32f65c9
+          ref: 251a9c27e101851d814f5266e31993bf9d283c6f
           path: policy
           persist-credentials: false
       - name: Check contracts, package versions and the requested release
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           python3 policy/scripts/component_release.py --repository-root candidate --baseline-root accepted --baseline-ref "$BASELINE_REF" --repository "$OWNER_REPOSITORY" --line "$RELEASE_LINE" --requested-version "$REQUESTED_VERSION"

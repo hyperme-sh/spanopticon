@@ -6,6 +6,32 @@ A coordinated minor release advances every participating component to `1.5.x`.
 A breaking API change requires a new major version, including before `1.0`.
 Pre-release versions are not supported by this initial stable-release gate.
 
+GitHub `test-<commit>` prereleases are development artifact snapshots. A wheel's
+embedded package version does not publish or reserve that stable version.
+Keep their artifact/consumer evidence under `releases/qualification`, outside
+`releases/accepted` and `releases/candidate`. Qualification does not establish
+stable API compatibility or a stable release baseline.
+
+An accepted component record requires an actual immutable, non-draft,
+non-prerelease GitHub release tagged `vMAJOR.MINOR.PATCH`. The shared component
+workflow verifies that channel, the peeled tag's source commit and the published
+asset digests against GitHub, both when accepting records and when consuming a
+selected baseline. Candidate-supplied booleans are not evidence. Missing records
+or unavailable verification fail stable admission closed. First stable release
+bootstrap remains a separate explicit release operation; development snapshots
+must not be installed as a substitute baseline.
+
+Package acceptance binds the component's artifact digest to a stable release
+attachment. A container's OCI manifest digest differs from a tarball's file hash:
+container acceptance instead requires `container_provenance_asset` in the accepted
+provenance. That stable attachment must be covered by the live release's asset
+digest and contain `schema_version: 1`, the exact `repository`, source `revision`,
+component `version` and complete `artifact` object (kind, image URI and manifest
+SHA-256). The guard verifies its bytes before reading those fields. Registry
+existence, image production and runtime consumer checks remain owning-pipeline
+requirements. Downloads use the fixed GitHub API origin and pass no API credential
+to its signed release-asset CDN redirect.
+
 A release bundle records the line, complete component membership, each component's
 version, immutable artifact identity and digest-bound API snapshot. Keep private
 component inventories and their snapshots in private release repositories. The

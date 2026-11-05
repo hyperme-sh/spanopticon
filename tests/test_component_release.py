@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 import tempfile
 import unittest
+from unittest.mock import patch
 
 spec = importlib.util.spec_from_file_location('component_release', Path(__file__).resolve().parents[1] / 'scripts/component_release.py')
 module = importlib.util.module_from_spec(spec); spec.loader.exec_module(module)
@@ -11,6 +12,8 @@ module = importlib.util.module_from_spec(spec); spec.loader.exec_module(module)
 
 class ComponentReleaseTest(unittest.TestCase):
     def setUp(self):
+        stable = patch.object(module, 'verify_accepted_record', return_value='0.24.0')
+        self.stable = stable.start(); self.addCleanup(stable.stop)
         self.temp = tempfile.TemporaryDirectory(); self.addCleanup(self.temp.cleanup)
         self.root = Path(self.temp.name)
         self.current = self.root / 'current'; self.previous = self.root / 'previous'
@@ -49,6 +52,7 @@ class ComponentReleaseTest(unittest.TestCase):
             module.admit(self.current, self.previous, 'example/component', '0.24')
         (self.current / 'pyproject.toml').write_text('[project]\nversion="0.24.1"\n')
         self.assertEqual(module.admit(self.current, self.previous, 'example/component', '0.24', 'v0.24.1'), '0.24.1')
+        self.stable.assert_called_with(self.previous, 'example/component', required=True)
         with self.assertRaisesRegex(ValueError, 'tag version'):
             module.admit(self.current, self.previous, 'example/component', '0.24', 'v0.24.2')
 
