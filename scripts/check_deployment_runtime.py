@@ -53,6 +53,14 @@ def main():
             with args.receipt.open('x',encoding='utf-8') as stream:
                 stream.write(json.dumps(receipt,sort_keys=True,indent=2)+'\n')
             print(args.engine+' runtime and HTTP smoke passed')
+        except Exception:
+            if namespace_created:
+                # Fixture-only diagnostics omit Secret contents and application logs.
+                for resource in ('pods', 'events'):
+                    subprocess.run(['kubectl','--context',args.context,'-n',name,'get',resource,'-o','wide'],check=False)
+                subprocess.run(['kubectl','--context',args.context,'-n',name,'get','pods','-o',
+                                'jsonpath={range .items[*]}{.metadata.name}{"\\n"}{.status.containerStatuses}{"\\n"}{end}'],check=False)
+            raise
         finally:
             if args.engine=='compose' and (root/'apply/compose.resolved.json').exists():
                 subprocess.run(['docker','--context',args.context,'compose','--env-file',os.devnull,'-p',name,'-f',str(root/'apply/compose.resolved.json'),'down'],check=True,stdout=subprocess.DEVNULL)
