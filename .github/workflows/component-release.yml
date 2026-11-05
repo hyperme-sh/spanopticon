@@ -45,12 +45,14 @@ jobs:
           RELEASE_LINE: ${{ inputs.release-line }}
           GH_TOKEN: ${{ github.token }}
         run: |
-          python3 policy/scripts/component_release.py --repository-root candidate --repository "$OWNER_REPOSITORY" --line "$RELEASE_LINE" --verify-accepted-record
+          if [[ "$GITHUB_EVENT_NAME" != pull_request ]]; then
+            python3 policy/scripts/component_release.py --repository-root candidate --repository "$OWNER_REPOSITORY" --line "$RELEASE_LINE" --verify-accepted-record
+          fi
           python3 policy/scripts/component_release.py --repository-root candidate --previous-source previous-source --repository "$OWNER_REPOSITORY" --line "$RELEASE_LINE" --configuration-only
   admission:
     name: Release compatibility
     needs: configuration
-    if: inputs.baseline-ref != '' && (github.event_name != 'pull_request' || needs.configuration.outputs.release-required == 'true')
+    if: github.event_name != 'pull_request' && inputs.baseline-ref != ''
     runs-on: ${{ github.event.repository.private && fromJSON('["self-hosted", "linux", "x64", "debrunner"]') || 'ubuntu-24.04' }}
     timeout-minutes: 5
     env:
@@ -92,7 +94,7 @@ jobs:
   initial:
     name: Initial release admission
     needs: configuration
-    if: inputs.baseline-ref == '' && (github.event_name != 'pull_request' || needs.configuration.outputs.release-required == 'true')
+    if: github.event_name != 'pull_request' && inputs.baseline-ref == ''
     runs-on: ${{ github.event.repository.private && fromJSON('["self-hosted", "linux", "x64", "debrunner"]') || 'ubuntu-24.04' }}
     timeout-minutes: 5
     steps:
@@ -120,3 +122,53 @@ jobs:
             exit 1
           fi
           python3 policy/scripts/component_release.py --repository-root candidate --repository "$OWNER_REPOSITORY" --line "$RELEASE_LINE" --requested-version "$REQUESTED_VERSION" --initial-release
+
+  development-comparison:
+    name: Record optional baseline comparison
+    if: github.event_name == 'pull_request' && inputs.baseline-ref != ''
+    runs-on: ${{ github.event.repository.private && fromJSON('["self-hosted", "linux", "x64", "debrunner"]') || 'ubuntu-24.04' }}
+    timeout-minutes: 5
+    env:
+      BASELINE_REF: ${{ inputs.baseline-ref }}
+      OWNER_REPOSITORY: ${{ github.repository }}
+      RELEASE_LINE: ${{ inputs.release-line }}
+    steps:
+      - name: Validate the optional immutable reference
+        run: |
+          python3 - <<'PY'
+          import os, re
+          assert re.fullmatch(r'[0-9a-f]{40}', os.environ['BASELINE_REF']), 'Baseline must be an immutable commit'
+          PY
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.sha }}
+          path: candidate
+          persist-credentials: false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ inputs.baseline-ref }}
+          path: accepted
+          persist-credentials: false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: hyperme-sh/spanopticon
+          ref: 7f5b9b21363d41b8f8ed14571195d10f4a11899f
+          path: policy
+          persist-credentials: false
+      - id: comparison
+        name: Compare contracts and artifact identities without advancing versions
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 policy/scripts/component_release.py --repository-root candidate --baseline-root accepted --baseline-ref "$BASELINE_REF" --repository "$OWNER_REPOSITORY" --line "$RELEASE_LINE"
+      - name: Report the comparison outcome
+        if: always()
+        env:
+          COMPARISON_OUTCOME: ${{ steps.comparison.outcome }}
+        run: |
+          echo "Optional baseline comparison outcome: $COMPARISON_OUTCOME" >> "$GITHUB_STEP_SUMMARY"
+          echo 'This is advisory development evidence, not release acceptance or authorization to change versions.' >> "$GITHUB_STEP_SUMMARY"
+          if [[ "$COMPARISON_OUTCOME" != success ]]; then
+            echo '::warning::Baseline comparison found a difference or could not be verified. Inspect its log; do not bump versions automatically.'
+          fi

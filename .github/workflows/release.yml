@@ -1,9 +1,5 @@
 name: Package release channels
 on:
-  workflow_run:
-    workflows: ["Validate templates"]
-    types: [completed]
-    branches: [main]
   push:
     tags: ['v*']
 permissions:
@@ -17,16 +13,12 @@ jobs:
     permissions:
       contents: write
       actions: read
-    if: >-
-      github.event_name == 'push' ||
-      (github.event.workflow_run.conclusion == 'success' &&
-       github.event.workflow_run.event == 'push' &&
-       github.event.workflow_run.head_branch == 'main')
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
       - name: Publish or promote exact tested artifacts
-        uses: hyperme-sh/.github/actions/release-channel@45b5987d7000ab44bddc4e5ec3a0ff7674d3b137
+        uses: hyperme-sh/.github/actions/release-channel@ecea1374b9d382d790dc13768a77678bbf33c432
         with:
           workflow: .github/workflows/validate.yml
           token: ${{ github.token }}
