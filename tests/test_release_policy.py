@@ -141,17 +141,18 @@ class ReleasePolicyTest(unittest.TestCase):
         import sys
         sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'scripts'))
         from render_release import render
+        from test_generator import ASSURANCE
         old = self.bundle('old')
         new = self.bundle('new', {'api': '1.4.1', 'worker': '1.4.3'}, digest='b' * 64)
-        output = render(old, new, self.root / 'rendered')
+        output = render(old, new, self.root / 'rendered', ASSURANCE)
         policy.load_bundle(output / 'release.json')
         compose = json.loads((output / 'api/compose.yaml').read_text())
         self.assertEqual(compose['services']['api']['image'].split('@sha256:')[1], 'b' * 64)
-        with self.assertRaises(FileExistsError): render(old, new, output)
+        with self.assertRaises(FileExistsError): render(old, new, output, ASSURANCE)
         doc = api(); doc['paths'] = {}
         bad = self.bundle('bad', {'api': '1.4.1', 'worker': '1.4.1'}, doc)
         # The CLI rejects an incompatible bundle before creating output.
-        with self.assertRaises(ValueError): render(old, bad, self.root / 'bad-output')
+        with self.assertRaises(ValueError): render(old, bad, self.root / 'bad-output', ASSURANCE)
         self.assertFalse((self.root / 'bad-output').exists())
 
 

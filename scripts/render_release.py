@@ -10,9 +10,11 @@ import sys
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from release.policy import PolicyError, contract_path, require, validate
 from new_plane import manifests
+from assurance import load, settings
 
 
-def render(previous, candidate, output):
+def render(previous, candidate, output, assurance=None):
+    settings(assurance)
     bundle = validate(previous, candidate)
     root = Path(candidate).resolve().parent
     prepared = {}
@@ -25,7 +27,7 @@ def render(previous, candidate, output):
         prepared[relative] = raw
         exported['components'][name]['contract'] = relative
         if component['artifact']['kind'] == 'container':
-            for filename, document in manifests(name, component['artifact']['uri']).items():
+            for filename, document in manifests(name, component['artifact']['uri'], assurance).items():
                 if filename == 'compose.yaml':
                     document['services'][name]['labels'] = {'org.opencontainers.image.version': component['version']}
                 else:
@@ -52,9 +54,10 @@ def main():
     parser.add_argument('--previous', type=Path, required=True)
     parser.add_argument('--candidate', type=Path, required=True)
     parser.add_argument('--output', type=Path, required=True)
+    parser.add_argument("--assurance-config", type=Path, required=True)
     args = parser.parse_args()
     try:
-        print(render(args.previous, args.candidate, args.output))
+        print(render(args.previous, args.candidate, args.output, load(args.assurance_config)))
     except (PolicyError, OSError, ValueError, TypeError, KeyError) as error:
         parser.exit(1, f'Render rejected: {error}\n')
 
