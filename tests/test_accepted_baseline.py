@@ -1,11 +1,15 @@
 import copy
 import hashlib
+import io
 import json
+import os
 from pathlib import Path
 import tempfile
 import unittest
+from unittest.mock import patch, Mock
+from urllib.error import HTTPError
 
-from release.accepted import verify_accepted_record
+from release.accepted import github_asset, verify_accepted_record
 
 
 class AcceptedBaselineTest(unittest.TestCase):
@@ -40,7 +44,20 @@ class AcceptedBaselineTest(unittest.TestCase):
     def verify(self):
         (self.folder / 'release.json').write_text(json.dumps(self.bundle))
         (self.folder / 'provenance.json').write_text(json.dumps(self.provenance))
-        return verify_accepted_record(self.root, 'example/component', required=True, fetch=self.fetch)
+        return verify_accepted_record(self.root, 'example/component', required=True, fetch=self.fetch,
+                                      fetch_asset=lambda repository, asset_id: self.attachment)
+
+    def container(self, document=None):
+        artifact = {'kind': 'container', 'uri': 'ghcr.io/example/component@sha256:'+'e'*64, 'sha256': 'e'*64}
+        self.bundle['components']['component']['artifact'] = artifact
+        document = document or {'schema_version': 1, 'repository': 'example/component',
+            'revision': 'b'*40, 'version': '0.24.0', 'artifact': artifact}
+        self.attachment = json.dumps(document).encode()
+        digest = 'sha256:' + hashlib.sha256(self.attachment).hexdigest()
+        self.provenance['assets'] = {'container-provenance.json': digest}
+        self.provenance['container_provenance_asset'] = 'container-provenance.json'
+        self.release['assets'] = [{'id': 9, 'name': 'container-provenance.json', 'digest': digest}]
+        return document
 
     def test_real_immutable_stable_release_binds_source_and_asset(self):
         self.assertEqual(self.verify(), '0.24.0')
@@ -105,6 +122,53 @@ class AcceptedBaselineTest(unittest.TestCase):
     def test_component_cannot_point_at_an_unrelated_stable_asset(self):
         self.bundle['components']['component']['artifact']['sha256'] = 'e'*64
         with self.assertRaisesRegex(ValueError, 'absent from stable asset'): self.verify()
+
+    def test_container_manifest_digest_is_bound_through_published_provenance(self):
+        self.container()
+        self.assertNotEqual(self.provenance['assets']['container-provenance.json'], 'sha256:'+'e'*64)
+        self.assertEqual(self.verify(), '0.24.0')
+
+    def test_container_provenance_must_bind_the_owner_source_version_and_image(self):
+        original = self.container()
+        for field, value in [('repository', 'other/component'), ('revision', 'c'*40),
+                             ('version', '0.24.1'), ('artifact', {'kind': 'container'})]:
+            with self.subTest(field=field):
+                invalid = {**original, field: value}
+                self.container(invalid)
+                with self.assertRaisesRegex(ValueError, 'does not bind'): self.verify()
+
+    def test_container_provenance_download_is_checked_against_live_asset_digest(self):
+        self.container()
+        self.attachment += b' '
+        with self.assertRaisesRegex(ValueError, 'bytes differ'): self.verify()
+
+    def test_container_without_a_published_provenance_attachment_is_rejected(self):
+        self.container()
+        self.provenance.pop('container_provenance_asset')
+        with self.assertRaisesRegex(ValueError, 'attachment required'): self.verify()
+
+    def test_asset_cdn_redirect_never_receives_the_api_credential(self):
+        opener = Mock()
+        redirect = HTTPError('https://api.github.com/owned', 302, 'redirect',
+            {'Location': 'https://release-assets.githubusercontent.com/owned?signature=fixture'}, io.BytesIO(b''))
+        opener.open.side_effect = [redirect, io.BytesIO(b'provenance')]
+        with patch('urllib.request.build_opener', return_value=opener), patch.dict(os.environ, {'GH_TOKEN': 'owned-fixture-token'}):
+            self.assertEqual(github_asset('example/component', 9), b'provenance')
+        first, second = (call.args[0] for call in opener.open.call_args_list)
+        self.assertEqual(first.get_header('Authorization'), 'Bearer owned-fixture-token')
+        self.assertFalse(any(key.lower() == 'authorization' for key, _ in second.header_items()))
+
+    def test_asset_redirects_to_other_origins_are_rejected(self):
+        for location in ['https://attacker.invalid/file', 'http://release-assets.githubusercontent.com/file',
+                         'https://user@release-assets.githubusercontent.com/file',
+                         'https://release-assets.githubusercontent.com:444/file']:
+            with self.subTest(location=location):
+                opener = Mock()
+                opener.open.side_effect = HTTPError('https://api.github.com/owned', 302, 'redirect',
+                    {'Location': location}, io.BytesIO(b''))
+                with patch('urllib.request.build_opener', return_value=opener), self.assertRaises(ValueError):
+                    github_asset('example/component', 9)
+                self.assertEqual(opener.open.call_count, 1)
 
     def test_repository_and_numeric_identity_cannot_be_spoofed(self):
         for value in [True, '7', 0, -1]:

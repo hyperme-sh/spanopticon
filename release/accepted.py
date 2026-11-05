@@ -7,10 +7,12 @@ the release channel, immutable tag target and published asset digests.
 from __future__ import annotations
 
 import json
+import hashlib
 import os
 import re
 import urllib.error
 import urllib.request
+from urllib.parse import urlparse
 from pathlib import Path
 
 from release.policy import PolicyError, json_document, load_bundle, require
@@ -43,7 +45,40 @@ def github_json(path):
         raise PolicyError("Unable to verify accepted stable release with GitHub") from None
 
 
-def verify_accepted_record(root, repository, *, required=False, fetch=None):
+def github_asset(repository, asset_id):
+    """Read a digest-bound provenance attachment; never forward API credentials."""
+    require(REPOSITORY.fullmatch(repository) and type(asset_id) is int and asset_id > 0,
+            "Invalid provenance asset identity")
+    headers = {"Accept": "application/octet-stream", "X-GitHub-Api-Version": "2022-11-28"}
+    if os.environ.get("GH_TOKEN"):
+        headers["Authorization"] = "Bearer " + os.environ["GH_TOKEN"]
+    opener = urllib.request.build_opener(_NoRedirect())
+    request = urllib.request.Request(f"https://api.github.com/repos/{repository}/releases/assets/{asset_id}", headers=headers)
+    try:
+        try:
+            response = opener.open(request, timeout=10)
+        except urllib.error.HTTPError as error:
+            location = error.headers.get("Location", "")
+            code = error.code
+            error.close()
+            target = urlparse(location)
+            require(code in {302, 303, 307} and target.scheme == "https"
+                    and target.hostname == "release-assets.githubusercontent.com"
+                    and target.port in {None, 443} and not target.username
+                    and not target.password and not target.fragment,
+                    "Untrusted provenance asset redirect")
+            # The signed CDN URL is obtained from the fixed GitHub API origin.
+            # It receives no API token, cookies or caller-controlled headers.
+            response = opener.open(urllib.request.Request(location, headers={"Accept": "application/octet-stream"}), timeout=10)
+        with response:
+            raw = response.read(1024 * 1024 + 1)
+        require(len(raw) <= 1024 * 1024, "Provenance attachment exceeds limit")
+        return raw
+    except (OSError, ValueError):
+        raise PolicyError("Unable to verify published container provenance") from None
+
+
+def verify_accepted_record(root, repository, *, required=False, fetch=None, fetch_asset=None):
     """Return the stable version, or None when no accepted record is present."""
     root = Path(root).resolve()
     require(isinstance(repository, str) and REPOSITORY.fullmatch(repository), "Invalid repository identity")
@@ -92,13 +127,36 @@ def verify_accepted_record(root, repository, *, required=False, fetch=None):
     expected = provenance.get("assets")
     require(isinstance(assets, list) and isinstance(expected, dict) and expected, "Published asset provenance required")
     published = {}
+    published_assets = {}
     for asset in assets:
         require(isinstance(asset, dict) and isinstance(asset.get("name"), str), "Invalid published asset")
         require(asset["name"] not in published, "Duplicate published asset")
         published[asset["name"]] = asset.get("digest")
+        published_assets[asset["name"]] = asset
     for asset_name, digest in expected.items():
         require(isinstance(asset_name, str) and re.fullmatch(r"[A-Za-z0-9_.-]+", asset_name), "Invalid accepted asset name")
         require(isinstance(digest, str) and DIGEST.fullmatch(digest), "Accepted asset digest required")
         require(published.get(asset_name) == digest, "Accepted asset differs from the stable published release")
-    require("sha256:" + component["artifact"]["sha256"] in expected.values(), "Accepted component artifact is absent from stable asset provenance")
+    artifact = component["artifact"]
+    if artifact["kind"] == "package":
+        require("sha256:" + artifact["sha256"] in expected.values(), "Accepted component artifact is absent from stable asset provenance")
+    else:
+        # An OCI manifest digest is not the digest of an exported image tarball.
+        # Bind it through a byte-verified attachment from this stable release.
+        name = provenance.get("container_provenance_asset")
+        require(isinstance(name, str) and name in expected and name in published_assets,
+                "Stable container provenance attachment required")
+        asset_id = published_assets[name].get("id")
+        require(type(asset_id) is int and asset_id > 0, "Invalid container provenance asset ID")
+        raw = (fetch_asset or github_asset)(repository, asset_id)
+        require(isinstance(raw, bytes) and len(raw) <= 1024 * 1024
+                and "sha256:" + hashlib.sha256(raw).hexdigest() == expected[name],
+                "Published container provenance bytes differ from the stable asset")
+        document = json.loads(raw)
+        require(isinstance(document, dict) and document.get("schema_version") == 1
+                and document.get("repository") == repository
+                and document.get("revision") == revision
+                and document.get("version") == component["version"]
+                and document.get("artifact") == artifact,
+                "Stable container provenance does not bind the accepted image")
     return component["version"]
