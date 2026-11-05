@@ -16,6 +16,14 @@ jobs:
         with:
           persist-credentials: false
       - run: python3 -m unittest discover -s tests -v
+      - name: Verify the reusable workflow executes the tested policy
+        run: |
+          set -euo pipefail
+          policy_ref=2946581954f27dd7bb7955d5eb3fa124b07fead9
+          git fetch --no-tags --depth=1 origin "$policy_ref"
+          for path in scripts/component_release.py release/accepted.py release/policy.py; do
+            git show "$policy_ref:$path" | cmp - "$path"
+          done
       - name: Validate generated Compose configuration
         run: |
           python3 scripts/new_plane.py example --image registry.example.org/team/plane@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa --output "$RUNNER_TEMP/plane-example"
