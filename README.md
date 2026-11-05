@@ -37,17 +37,24 @@ the [Apache License, Version 2.0](LICENSE).
 
 ## Template release channels
 
-A successful main push publishes the tested template/generator archive as an
-immutable `test-<commit>` GitHub prerelease, after both template checks and the
-coordinated-release policy gate pass. A `vMAJOR.MINOR.PATCH` tag at that commit
-promotes the same archive bytes to a stable release. This is a template release,
-not publication or deployment of the services described by a plane manifest.
-The coordinated service compatibility policy remains a separate required check.
+The declared next bundle version is in [.github/test-channel.json](.github/test-channel.json).
+After main template validation succeeds, the test publisher creates
+`0.24.0-test.0`, `0.24.0-test.1`, and so on, with the exact tested template archive.
+Pull requests validate without publishing. Counters are scoped to this repository
+and target version; the publisher never rewrites existing tags or assets.
 
-Repository immutable releases must be enabled. Promotion verifies the original
-successful Actions artifact, not just release metadata, and must occur before
-that artifact expires (90-day requested retention). Expired evidence requires a
-new validated main revision. No deployment credentials or reviewer gate are used.
+Choose a gold test by its exact tag. An explicit **Test bundles** workflow dispatch
+on main with `gold_test` copies that bundle's assets, including its original test
+provenance, unchanged to the declared `0.24.0` stable bundle. It does not rebuild,
+change embedded package versions or automatically select a gold candidate.
+Stable promotion requires the owner's explicit selection; automated main
+publication is confined to the test channel. After stable promotion, declare the
+next target before publishing new test candidates.
+
+These are template release bundles, not service package versions or evidence of
+runtime/provider acceptance. The services' qualified dependency locks and package
+compatibility checks remain separate. See [test bundles](docs/test-bundles.md) for
+publication, promotion and retention behavior.
 
 ### Additive Python module releases
 
