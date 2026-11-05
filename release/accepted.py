@@ -27,7 +27,7 @@ class _NoRedirect(urllib.request.HTTPRedirectHandler):
         return None
 
 
-def github_json(path):
+def github_json(path, *, document_type=dict):
     """Read only the fixed GitHub API origin, without credential redirects."""
     headers = {"Accept": "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28"}
     token = os.environ.get("GH_TOKEN", "")
@@ -39,7 +39,7 @@ def github_json(path):
             raw = response.read(1024 * 1024 + 1)
         require(len(raw) <= 1024 * 1024, "GitHub release response exceeds limit")
         value = json.loads(raw)
-        require(isinstance(value, dict), "Invalid GitHub release response")
+        require(isinstance(value, document_type), "Invalid GitHub release response")
         return value
     except (OSError, ValueError, urllib.error.HTTPError):
         raise PolicyError("Unable to verify accepted stable release with GitHub") from None
