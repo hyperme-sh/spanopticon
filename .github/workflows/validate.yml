@@ -63,7 +63,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     env:
-      KIND_NAME: spanopticon-ci-${{ github.run_id }}-${{ github.run_attempt }}
+      KIND_NAME: spanopticon-fleet-ci-${{ github.run_id }}-${{ github.run_attempt }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
@@ -87,6 +87,8 @@ jobs:
           docker exec "$KIND_NAME-control-plane" crictl pull "$image"
       - name: Qualify Helm install and upgrade
         run: python3 scripts/check_deployment_runtime.py --engine helm --context "kind-$KIND_NAME" --receipt "$RUNNER_TEMP/deployment-receipts/helm.json"
+      - name: Qualify fleet producer with explicit fixture inputs
+        run: python3 scripts/check_fleet_qualification.py --context "kind-$KIND_NAME" --receipt "$RUNNER_TEMP/deployment-receipts/fleet-fixture.json"
       - name: Remove only the disposable cluster
         if: always()
         run: |

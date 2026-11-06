@@ -1,0 +1,89 @@
+name: Qualify fleet test bundle
+on:
+  push:
+    branches: [main]
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  inventory:
+    runs-on: ubuntu-24.04
+    outputs:
+      available: ${{ steps.inventory.outputs.available }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - id: inventory
+        name: Require explicit fleet inputs
+        run: |
+          if test -f fleet/test.json; then
+            echo 'available=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'available=false' >> "$GITHUB_OUTPUT"
+            echo 'Fleet inventory is not configured. No qualification or publication occurred.' >> "$GITHUB_STEP_SUMMARY"
+          fi
+  validate:
+    needs: inventory
+    if: needs.inventory.outputs.available == 'true'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - name: Install isolated tools
+        run: |
+          python3 -m venv "$RUNNER_TEMP/fleet-python"
+          "$RUNNER_TEMP/fleet-python/bin/pip" install -r requirements-deployment.txt
+          python3 scripts/install_deployment_test_tools.py --output "$RUNNER_TEMP/fleet-tools"
+          echo "$RUNNER_TEMP/fleet-python/bin" >> "$GITHUB_PATH"
+          echo "$RUNNER_TEMP/fleet-tools" >> "$GITHUB_PATH"
+      - run: python3 scripts/qualify_fleet.py --validate-only --output "$RUNNER_TEMP/fleet-validation"
+  qualify:
+    needs: [inventory, validate]
+    if: >-
+      github.event_name == 'push' && github.ref == 'refs/heads/main' &&
+      needs.inventory.outputs.available == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      KIND_NAME: spanopticon-fleet-${{ github.run_id }}-${{ github.run_attempt }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Install isolated tools
+        run: |
+          python3 -m venv "$RUNNER_TEMP/fleet-python"
+          "$RUNNER_TEMP/fleet-python/bin/pip" install -r requirements-deployment.txt
+          python3 scripts/install_deployment_test_tools.py --output "$RUNNER_TEMP/fleet-tools"
+          echo "$RUNNER_TEMP/fleet-python/bin" >> "$GITHUB_PATH"
+          echo "$RUNNER_TEMP/fleet-tools" >> "$GITHUB_PATH"
+          echo "KUBECONFIG=$RUNNER_TEMP/fleet-kubeconfig" >> "$GITHUB_ENV"
+      - name: Create disposable cluster
+        run: kind create cluster --name "$KIND_NAME" --image kindest/node:v1.37.0@sha256:a1ed56cfb0e7b93589bdf97c8cd566405a265939e3620fc4f5de89adff580ae5 --wait 120s
+      - name: Qualify exact fleet assets
+        env:
+          FLEET_TEST_CREDENTIALS: ${{ secrets.FLEET_TEST_CREDENTIALS }}
+        run: python3 scripts/qualify_fleet.py --kube-context "kind-$KIND_NAME" --output "$RUNNER_TEMP/fleet-test-bundle"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: fleet-test-bundle-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/fleet-test-bundle
+          if-no-files-found: error
+          retention-days: 90
+      - name: Remove task-owned cluster
+        if: always()
+        run: |
+          if command -v kind >/dev/null; then
+            kind delete cluster --name "$KIND_NAME"
+          fi
+  publish:
+    needs: qualify
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    permissions:
+      contents: read
+      actions: read
+      packages: write
+    uses: ./.github/workflows/publish-fleet-test.yml
