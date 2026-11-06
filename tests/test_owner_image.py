@@ -82,3 +82,15 @@ class OwnerImageTests(unittest.TestCase):
                       '401 unauthorized','403 forbidden','dial tcp: lookup ghcr.io: no such host',
                       f'Error response from registry: failed to find "{ref}": another: not found'):
             with self.subTest(error=error):self.assertFalse(cli.missing_manifest(error,ref))
+
+    def test_private_owner_token_cannot_read_other_repositories(self):
+        spec=importlib.util.spec_from_file_location('owner_cli',Path(__file__).parents[1]/'scripts/owner_image.py')
+        cli=importlib.util.module_from_spec(spec);spec.loader.exec_module(cli)
+        value={**self.value,'owner':'hypermesh-plane'}
+        plane={'full_name':'hyperme-sh/hypermesh-plane'}
+        cli.owner_token_scope(value,{'total_count':1,'repositories':[plane]})
+        for data in ({}, {'total_count':2,'repositories':[plane]},
+                     {'total_count':1,'repositories':[{'full_name':'hyperme-sh/other'}]},
+                     {'total_count':1,'repositories':[plane,plane]}):
+            with self.subTest(data=data), self.assertRaisesRegex(ValueError,'scoped only'):
+                cli.owner_token_scope(value,data)

@@ -18,6 +18,16 @@ def command(args, **kwargs):
     return result.stdout
 
 
+
+def owner_token_scope(value,document):
+    # Public gateway downloads keep their proven coordinator job token path.
+    if value['owner']!='hypermesh-plane':return
+    repositories=document.get('repositories',[])
+    b.require(document.get('total_count')==1 and len(repositories)==1
+              and repositories[0].get('full_name')=='hyperme-sh/hypermesh-plane',
+              'Artifact token must be scoped only to hyperme-sh/hypermesh-plane')
+
+
 def download(value,output):
     repo='hyperme-sh/'+value['owner']
     def get(path):
@@ -78,8 +88,12 @@ def publish(value,archive,env):
 def main():
     parser=argparse.ArgumentParser();parser.add_argument('action',choices=['download','publish'])
     parser.add_argument('--pin',type=Path,required=True);parser.add_argument('--directory',type=Path,required=True)
+    parser.add_argument('--require-owner-token-scope',action='store_true')
     args=parser.parse_args();value=image.pin(b.document(args.pin.read_bytes()))
-    if args.action=='download':download(value,args.directory)
+    if args.action=='download':
+        if args.require_owner_token_scope and value['owner']=='hypermesh-plane':
+            owner_token_scope(value,b.document(command(['gh','api','installation/repositories?per_page=100'],stdout=subprocess.PIPE)))
+        download(value,args.directory)
     else:
         receipt=publish(value,args.directory/'image.tar',os.environ)
         (args.directory/'publication.json').write_text(json.dumps(receipt,indent=2)+'\n')
