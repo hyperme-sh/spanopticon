@@ -13,7 +13,7 @@ import re
 PROVIDER = re.compile(r'stripe', re.IGNORECASE)
 EXTENSIONS = {'.py','.pyi','.go','.rs','.js','.jsx','.ts','.tsx','.proto','.sql',
               '.json','.yaml','.yml','.toml','.jinja','.j2','.h','.hpp','.c','.cpp',
-              '.kt','.kts','.java','.swift','.cs'}
+              '.kt','.kts','.java','.swift','.cs','.mod','.sum'}
 
 
 def violations(paths):
