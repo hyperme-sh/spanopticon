@@ -69,12 +69,16 @@ jobs:
         with:
           persist-credentials: false
       - run: python3 -m examples.settlement.check_sample --receipt "$RUNNER_TEMP/settlement-receipt.json"
+      - name: Qualify independent identity, host enrollment and self-use settlement
+        run: python3 -m examples.operator.check_sample --receipt "$RUNNER_TEMP/operator-receipt.json"
       - name: Retain settlement qualification
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: settlement-runtime-receipt
-          path: ${{ runner.temp }}/settlement-receipt.json
+          path: |
+            ${{ runner.temp }}/settlement-receipt.json
+            ${{ runner.temp }}/operator-receipt.json
           if-no-files-found: error
           retention-days: 90
 

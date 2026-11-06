@@ -1,0 +1,91 @@
+x-runtime: &runtime
+  build:
+    context: ../..
+    dockerfile: examples/operator/Dockerfile
+    args:
+      SOURCE_COMMIT: ${OPERATOR_SOURCE_COMMIT:?Exact sample source revision required}
+  read_only: true
+  cap_drop: [ALL]
+  security_opt: [no-new-privileges:true]
+  tmpfs: [/tmp]
+  networks: [operator-test]
+
+x-health: &health
+  test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/ready', timeout=2)"]
+  interval: 2s
+  timeout: 3s
+  retries: 30
+
+services:
+  identity:
+    <<: *runtime
+    command: [python, -m, uvicorn, examples.operator.identity:create_app, --factory, --host, 0.0.0.0, --port, '8000']
+    environment:
+      IDENTITY_ACCOUNTS_FILE: /run/secrets/accounts
+      IDENTITY_PRIVATE_KEY_FILE: /run/secrets/issuer-private
+    secrets: [accounts, issuer-private]
+    healthcheck: *health
+  operator:
+    <<: *runtime
+    command: [python, -m, uvicorn, examples.operator.service:create_app, --factory, --host, 0.0.0.0, --port, '8000']
+    environment:
+      OPERATOR_CONFIG_FILE: /run/secrets/operator-config
+      OPERATOR_DB: /state/operator.sqlite3
+      IDENTITY_PUBLIC_KEY_FILE: /run/secrets/issuer-public
+      SETTLEMENT_SIGNER_FILE: /run/secrets/settlement-signer
+      SETTLEMENT_URL: http://settlement:8000
+    secrets: [operator-config, issuer-public, settlement-signer]
+    volumes: [operator-state:/state]
+    depends_on:
+      identity:
+        condition: service_healthy
+    healthcheck: *health
+  settlement:
+    <<: *runtime
+    command: [python, -m, uvicorn, examples.settlement.server:create_app, --factory, --host, 0.0.0.0, --port, '8000']
+    environment:
+      SETTLEMENT_TEST_KEYS_FILE: /run/secrets/settlement-keys
+      SETTLEMENT_TEST_LEDGER_FILE: /state/ledger.sqlite3
+    secrets: [settlement-keys]
+    volumes: [settlement-state:/state]
+    healthcheck: *health
+  host:
+    <<: *runtime
+    profiles: [host]
+    command: [python, -m, examples.operator.host]
+    environment:
+      HOST_BOOTSTRAP_FILE: /run/secrets/host-bootstrap
+      OPERATOR_URL: http://operator:8000
+    secrets: [host-bootstrap]
+    volumes: [host-state:/state]
+    depends_on:
+      operator:
+        condition: service_healthy
+    healthcheck:
+      test: [CMD, python, -c, "from pathlib import Path; import time; assert time.time()-Path('/state/healthy').stat().st_mtime < 10"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+secrets:
+  accounts:
+    file: ${OPERATOR_TEST_SECRETS:?Generate TEST configuration}/accounts.json
+  issuer-private:
+    file: ${OPERATOR_TEST_SECRETS}/issuer-private.pem
+  issuer-public:
+    file: ${OPERATOR_TEST_SECRETS}/issuer-public.pem
+  operator-config:
+    file: ${OPERATOR_TEST_SECRETS}/operator.json
+  settlement-signer:
+    file: ${OPERATOR_TEST_SECRETS}/signer.json
+  settlement-keys:
+    file: ${OPERATOR_TEST_SECRETS}/settlement.json
+  host-bootstrap:
+    file: ${OPERATOR_TEST_SECRETS}/host.json
+volumes:
+  operator-state:
+  settlement-state:
+  host-state:
+networks:
+  operator-test:
+    internal: true
