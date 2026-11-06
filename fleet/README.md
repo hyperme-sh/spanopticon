@@ -1,29 +1,41 @@
-# Fleet qualification inputs
+# Owner images for test deployment
 
-There is no admitted fleet inventory yet. The workflow reports this and skips
-qualification/publication. Do not fill this gap with fixture images or fabricated
-provenance. Test publication is already authorized; missing runtime inputs are
-not a human approval requirement.
+`owner-images/hypermesh-gateway.json` pins a real gateway main build, its successful
+owner qualification run, retained artifact ZIP, Docker archive, OCI manifest and
+runtime configuration. The verifier checks the API provenance, source labels,
+platform and every referenced blob. It never rebuilds an image or executes the
+archive. The plane allowlist accepts only the public-core artifact; it excludes
+the billing-enabled integration image.
 
-A reviewed PR supplies `test.json`, `compose.json` and `chart.tgz` here.
-`test.json` has exactly `schema` (integer 1), `components` (the bundle's digest,
-embedded-version and source-revision map), and `assurance` (the existing provider
-configuration). Compose/chart assets must implement the selected adapter contract,
-match every image, preserve fail-closed behavior and contain no credentials.
-Use the existing asset preparation commands when the images implement that profile;
-arbitrary service images are not automatically compatible.
+On main, `owner-images.yml` copies the verified gateway bytes to
+`ghcr.io/hyperme-sh/spanopticon-hypermesh-gateway:0.24.0-test.<run_id>` using the
+workflow package token, then downloads and hashes every blob. Existing test tags
+must contain identical bytes. No stable tags, Git tags, releases, package visibility
+changes or moving aliases are created. PRs only verify. Pins must be refreshed
+before the retained owner artifact expires; a missing or expired artifact fails
+closed. Publication requires the job token to read the public owner's Actions
+artifact and write the destination GHCR package.
 
-The qualifier assigns the bundle label from the main run ID, preserving all asset
-bytes and embedded versions. PRs validate structure and rendered manifests only.
-Main runs require `FLEET_TEST_CREDENTIALS`, a secret JSON object mapping each
-selected assurance secret name to its test-only credential. Values are written
-only to a temporary directory and the task-owned Kubernetes namespace, never the
-uploaded bundle. Public images must be pullable from Docker and kind; private
-image-pull credential integration remains separate work.
+The gateway Compose file and Helm chart pin the same manifest digest. They use
+port 8000 and `/api/v1/health/`, matching this service rather than the generic
+adapter contract. After publication, authenticate Docker/Kubernetes for GHCR as
+needed, then run:
 
-Before adding this inventory, record owner source/build provenance and dependency
-qualification evidence for every image. This workflow checks immutable byte and
-runtime receipt bindings; it does not independently attest image builds. Real
-provider behavior, service-to-service smoke, persistent data, migration and
-rollback acceptance must remain explicitly tracked. Compose health and Helm
-readiness/upgrade alone do not establish those outcomes.
+```sh
+docker compose -f fleet/gateway/compose.yaml up -d --wait
+helm upgrade --install gateway-test fleet/gateway/chart --namespace gateway-test --create-namespace --wait
+```
+
+These assets exercise startup with the owner's empty-ticket stand-in. They disable
+WireGuard and background assignment refresh, force live API-key validation, and
+provide no provider or tenant credentials. Health readiness is **not** ticket,
+authentication, routing, assurance or real fleet acceptance. They are not an
+operational gateway configuration. Do not expose them through a public ingress.
+
+There is deliberately no `test.json` admission inventory yet. The public-core
+plane image, dependent service images and actual assurance adapter configuration
+must be qualified together in Compose and Helm before the separate fleet bundle
+publisher can advance its `test` channel. Image publication alone cannot satisfy
+that gate. Chart version `0.0.0` is a source placeholder, not a release.
+
+See [qualification input requirements](qualification-inputs.md) for the separate bundle inventory and credential contract.
