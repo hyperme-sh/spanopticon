@@ -37,3 +37,5 @@ plane image, dependent service images and actual assurance adapter configuration
 must be qualified together in Compose and Helm before the separate fleet bundle
 publisher can advance its `test` channel. Image publication alone cannot satisfy
 that gate. Chart version `0.0.0` is a source placeholder, not a release.
+
+See [qualification input requirements](qualification-inputs.md) for the separate bundle inventory and credential contract.
