@@ -12,12 +12,13 @@ applies. Stable releases and gold promotion remain separately authorized work.
 ## Qualification producer contract
 
 The reusable `.github/workflows/publish-fleet-test.yml` is restricted to a push to
-Spanopticon main from `.github/workflows/qualify-fleet.yml`. That producer is the
-remaining integration point: it must assemble the actual owner-image inventory,
-qualify dependencies and provenance, exercise the exact Compose and Helm bundle,
-and upload its output before calling the publisher through `needs: qualify`.
-This change does not add a substitute fixture producer or claim a fleet has been
-published. The existing template archive workflow remains separate.
+Spanopticon main from `.github/workflows/qualify-fleet.yml`. The producer now validates reviewed `fleet/` inputs, assembles one OCI bundle,
+exercises the exact Compose and Helm bytes including Helm upgrade, and uploads
+the same-run/attempt artifact before calling the publisher through `needs: qualify`.
+No fleet inventory is configured yet: the workflow reports that state and skips
+qualification/publication. Adding real owner images, their source/dependency
+evidence and compatible service assets remains necessary; fixture images are not
+a substitute. The existing template archive workflow remains separate.
 
 The producer must use the candidate `0.24.0-test.${GITHUB_RUN_ID}`. GitHub allocates
 that identity before qualification, so the chart/bundle can be tested without
@@ -95,3 +96,19 @@ publisher removes its temporary auth directory on exit. The job token needs GHCR
 package write access; public anonymous fetch and private access still need live
 qualification after the first actual publication. No package visibility changes
 are made here.
+
+## Fleet qualification execution
+
+See [fleet inputs](../fleet/README.md) for the reviewed input contract. PR validation
+checks the component/asset inventory and Helm render without accessing credentials
+or applying workloads. Only main pushes run qualification with test-only assurance
+credentials, a disposable kind context and the job Docker daemon. Success records
+are written only after both runtime consumers, Helm upgrade and cleanup succeed.
+Cleanup removes the task-owned namespace and Compose resources without deleting
+application volumes. Credentials and expanded runtime files stay outside the
+uploaded OCI artifact. A failure leaves no successful qualification record.
+
+This initial producer establishes readiness and upgrade of the selected assets.
+Owner build provenance, dependency compatibility, inter-service/business smoke,
+private image access and real provider behavior still need their own evidence.
+The workflow does not infer those outcomes from container health.
