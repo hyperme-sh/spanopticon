@@ -67,12 +67,13 @@ jobs:
         env:
           FLEET_TEST_CREDENTIALS: ${{ secrets.FLEET_TEST_CREDENTIALS }}
         run: python3 scripts/qualify_fleet.py --kube-context "kind-$KIND_NAME" --output "$RUNNER_TEMP/fleet-test-bundle"
+      # Same-run handoff for publish-fleet-test. GHCR keeps the qualified bytes.
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: fleet-test-bundle-${{ github.run_attempt }}
           path: ${{ runner.temp }}/fleet-test-bundle
           if-no-files-found: error
-          retention-days: 90
+          retention-days: 1
       - name: Remove task-owned cluster
         if: always()
         run: |
