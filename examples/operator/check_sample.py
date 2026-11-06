@@ -82,7 +82,7 @@ except urllib.error.HTTPError as exc:
                     "headers": headers, "body": body}), text=True, capture_output=True, check=True)
             response = json.loads(completed.stdout)
             if response["status"] != expected:
-                raise AssertionError(f"{path}: expected {expected}, got {response['status']}: {response['body']}")
+                raise AssertionError(f"{path}: expected {expected}, got {response['status']}")
             return response["body"] if expected < 400 else None
 
         def wait_for(function, predicate, limit=60):
@@ -127,6 +127,21 @@ except urllib.error.HTTPError as exc:
             run("stop", "settlement")
             lease = call("operator", prefix + "/leases", request, token=owner, expected=201)
             assert call("operator", prefix + "/leases", request, token=owner, expected=201)["id"] == lease["id"]
+            other_device = call("operator", prefix + "/devices",
+                device_body | {"serial": "cedar-unbound-retry-target"}, token=owner, expected=201)
+            call("operator", prefix + "/leases", request | {"device_id": other_device["id"]}, token=owner, expected=409)
+            foreign = call("operator", prefix + "/devices",
+                {"host_org_id": other_organization, "serial": "foreign-credential-fixture"}, token=outsider, expected=201)
+            public_key = run("exec", "-T", "operator", "python", "-c",
+                "import sqlite3; print(sqlite3.connect('/state/operator.sqlite3').execute('SELECT wg_public_key FROM devices WHERE id=?',(" + repr(device["id"]) + ",)).fetchone()[0])", capture=True)
+            enrollment = {"enroll_token": foreign["issued_enroll_token"], "host_name": "foreign-fixture", "wg_public_key": public_key}
+            call("operator", prefix + "/agent/enroll", enrollment, expected=409)
+            foreign_host = call("operator", prefix + "/agent/enroll", enrollment | {
+                "wg_public_key": base64.b64encode(hashlib.sha256(b"foreign-public-key-fixture").digest()).decode()})
+            result = {"sha256": hashlib.sha256(b"cedar-self-use-workload-v1").hexdigest(), "exit_code": 0}
+            call("operator", prefix + "/agent/jobs/" + lease["id"] + "/result", result,
+                 token=foreign_host["device_secret"], expected=404)
+            call("operator", prefix + "/agent/jobs/" + lease["id"] + "/result", result, token=owner, expected=401)
             call("operator", prefix + "/leases", request | {"self_use": False}, token=owner, expected=422)
             url = prefix + "/leases/" + lease["id"]
             call("operator", url, token=outsider, expected=404)
@@ -156,6 +171,7 @@ except urllib.error.HTTPError as exc:
                 "import importlib.util; assert all(importlib.util.find_spec(p) is None for p in ('controlplane_billing','payment_service'))")
             receipt.update(complete=True, identity_verified=True, tenant_and_organization_denials=True,
                 one_use_enrollment=True, host_executed_job=True, unbilled_self_use=True,
+                duplicate_host_key_denied=True, foreign_host_result_denied=True, conflicting_lease_retry_denied=True,
                 durable_event=terminal["event"], settlement=settled["settlement"],
                 response_loss_replay=True, settlement_operations=1,
                 test_grant={"amount": 1, "asset": "TEST", "network": "local"},
