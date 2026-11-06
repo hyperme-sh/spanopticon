@@ -1,0 +1,6 @@
+{
+  "repository": "https://github.com/hyperme-sh/controlplane-events",
+  "commit": "6560f9603a99b27d9920507f5d9f52dc5ff67129",
+  "path": "src/controlplane_events/schemas/hypermesh.lease.ended.v1.json",
+  "sha256": "7d92717fe1dc0cc5b5c9e821071a0955c0a6f947b7265d9b7caced5048bfd5a9"
+}
