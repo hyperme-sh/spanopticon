@@ -36,3 +36,8 @@ the blanket prohibition only for that opted-in test channel. Stable promotion
 still requires explicit owner selection of the exact gold test and destination;
 never dispatch it based only on CI success or a merged PR. Do not move/delete
 historical tags, change package versions, or advance `next` without authorization.
+
+The owner also authorizes fleet `0.24.0-test.N` GHCR autotagging and test
+publication for qualified PR-based main updates without further approval.
+This does not authorize stable tags/releases, gold promotion, version advances,
+or replacement/deletion of existing immutable candidates.

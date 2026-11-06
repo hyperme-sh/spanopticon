@@ -5,6 +5,9 @@ They support test selection, Compose plans/apply, and Helm plans/install/upgrade
 They do not publish OCI artifacts, select production, promote releases or change
 package versions. The existing GitHub template archives are not OCI deployment
 bundles: a producer must first assemble and publish the profile described below.
+The [fleet test publisher](fleet-test-publication.md) consumes qualified main-run
+artifacts; the qualification producer is wired, but its real fleet inventory
+and service acceptance inputs remain to be supplied.
 
 ## Prerequisites
 

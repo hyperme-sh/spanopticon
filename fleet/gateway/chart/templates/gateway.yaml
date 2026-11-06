@@ -1,0 +1,49 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}-gateway
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app.kubernetes.io/instance: {{ .Release.Name | quote }}}
+  template:
+    metadata:
+      labels: {app.kubernetes.io/instance: {{ .Release.Name | quote }}}
+    spec:
+      automountServiceAccountToken: false
+      securityContext: {runAsNonRoot: true, runAsUser: 65532, runAsGroup: 65532, fsGroup: 65532}
+      containers:
+        - name: gateway
+          image: ghcr.io/hyperme-sh/spanopticon-hypermesh-gateway@sha256:0c153a653423dfa5598e78c731e2af59dae529234631dd9187ab5c220fe17df9
+          securityContext:
+            readOnlyRootFilesystem: true
+            allowPrivilegeEscalation: false
+            capabilities: {drop: [ALL]}
+          ports: [{name: http, containerPort: 8000}]
+          env:
+            - {name: PORT, value: '8000'}
+            - {name: FASTAPI_ENV, value: production}
+            - {name: PYTHONDONTWRITEBYTECODE, value: '1'}
+            - {name: HYPERMESH_REQUIRE_KEY_VALIDATE, value: '1'}
+            - {name: HYPERMESH_WG_APPLY, value: '0'}
+            - {name: HYPERMESH_ASSIGNMENT_REFRESH_S, value: '0'}
+            - {name: HYPERMESH_GATEWAY_SERVICE_SECRET, value: ''}
+          readinessProbe:
+            httpGet: {path: /api/v1/health/, port: http}
+            periodSeconds: 5
+          livenessProbe:
+            httpGet: {path: /api/v1/health/, port: http}
+            initialDelaySeconds: 20
+          resources:
+            requests: {cpu: 100m, memory: 256Mi}
+            limits: {cpu: '1', memory: 1Gi}
+          volumeMounts: [{name: tmp, mountPath: /tmp}]
+      volumes: [{name: tmp, emptyDir: {medium: Memory, sizeLimit: 16Mi}}]
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Release.Name }}-gateway
+spec:
+  selector: {app.kubernetes.io/instance: {{ .Release.Name | quote }}}
+  ports: [{port: 8000, targetPort: http}]
