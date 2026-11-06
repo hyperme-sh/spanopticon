@@ -17,7 +17,7 @@ publish service images.
 ```sh
 python3 scripts/new_plane.py example-plane \
   --image registry.example.org/team/plane@sha256:YOUR_64_HEX_DIGEST \
-  --assurance-config examples/assurance/stripe-kyc.json \
+  --assurance-config examples/assurance/kyc.json \
   --output ./example-plane
 ```
 
