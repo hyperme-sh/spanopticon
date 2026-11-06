@@ -15,7 +15,9 @@ container is removed. Do not store real hosts, tenant data or payments here.
 
 The Helm chart requires `existingSecret`, with `postgres-password`, `ticket-key`
 and `database-url` keys. The database URL must address `<release>-postgres:5432`,
-database and username `plane_test`. Use a disposable namespace/cluster. PostgreSQL
+database and username `plane_test`. The migration init container rejects URLs
+that name another host, database, user or driver before connecting. Use a
+disposable namespace/cluster. PostgreSQL
 uses an emptyDir; deleting/replacing its pod discards test data. The bootstrap
 account is an administrator for this disposable database. These assets do not
 qualify runtime least-privilege database access, RLS or persistent storage.

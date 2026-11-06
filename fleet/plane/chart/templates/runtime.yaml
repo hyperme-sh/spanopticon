@@ -92,7 +92,7 @@ spec:
         command:
         - /app/.venv/bin/python
         - -c
-        - "import os,time; from controlplane_db import migrations; e=migrations._engine(os.environ['DATABASE_URL']);\n\
+        - "import os,time; from sqlalchemy.engine import make_url; from controlplane_db import migrations; u=make_url(os.environ['DATABASE_URL']);\nif (u.host,u.database,u.username,u.drivername)!=(\"{{ .Release.Name }}-postgres\",\"plane_test\",\"plane_test\",\"postgresql+psycopg\"):\n raise ValueError('Refusing a database outside this disposable test deployment')\ne=migrations._engine(os.environ['DATABASE_URL']);\n\
           for attempt in range(60):\n try:\n  with e.connect(): pass\n  break\n except\
           \ Exception:\n  if attempt==59: raise\n  time.sleep(2)\ne.dispose(); migrations.upgrade(os.environ['DATABASE_URL'],\
           \ ['platform','events','hypermesh'])"
