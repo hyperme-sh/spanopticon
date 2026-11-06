@@ -7,7 +7,7 @@ import hashlib
 from pathlib import Path
 import sqlite3
 
-from controlplane_billing.settlement import SignedSettlementIntent, SettlementResult
+from .contract import SignedSettlementIntent, SettlementResult
 
 
 class DurableTestProcessor:

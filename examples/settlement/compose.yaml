@@ -1,0 +1,27 @@
+services:
+  settlement:
+    build:
+      context: ../..
+      dockerfile: examples/settlement/Dockerfile
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    tmpfs: [/tmp]
+    environment:
+      SETTLEMENT_TEST_KEYS_FILE: /run/secrets/test-keys
+      SETTLEMENT_TEST_LEDGER_FILE: /state/ledger.sqlite3
+    secrets: [test-keys]
+    volumes:
+      - ledger:/state
+    ports:
+      - "127.0.0.1:${SETTLEMENT_TEST_PORT:-18081}:8000"
+    healthcheck:
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/ready', timeout=2)"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+secrets:
+  test-keys:
+    file: ${SETTLEMENT_TEST_KEYS_FILE:?Generate local TEST credentials first}
+volumes:
+  ledger:

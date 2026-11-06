@@ -6,7 +6,7 @@ import os
 from pathlib import Path
 from fastapi import FastAPI,HTTPException
 from pydantic import BaseModel,ConfigDict,Field
-from controlplane_billing.settlement import SettlementIntent,SignedSettlementIntent
+from .contract import SettlementIntent,SignedSettlementIntent
 from .adapter import Adapter,TestProcessor,test_verifier
 from .durable import DurableTestProcessor
 

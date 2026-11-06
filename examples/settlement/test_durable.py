@@ -7,9 +7,9 @@ import sqlite3
 import tempfile
 import unittest
 
-from adapter import Adapter, test_verifier
-from durable import DurableTestProcessor
-from controlplane_billing.settlement import SettlementIntent, SignedSettlementIntent
+from examples.settlement.adapter import Adapter, test_verifier
+from examples.settlement.durable import DurableTestProcessor
+from examples.settlement.contract import SettlementIntent, SignedSettlementIntent
 
 
 def signed(intent=None):
