@@ -1,10 +1,10 @@
 name: Copy qualified owner images to GHCR test
 on:
   pull_request:
-    paths: ['deployment/owner_image.py', 'scripts/owner_image.py', 'scripts/check_owner_image_runtime.py', 'fleet/**', '.github/workflows/owner-images.yml', '.github/workflows/owner-image.yml']
+    paths: ['deployment/owner_image.py', 'scripts/owner_image.py', 'scripts/check_owner_image_runtime.py', 'scripts/qualify_plane_runtime.py', 'fleet/**', '.github/workflows/owner-images.yml', '.github/workflows/owner-image.yml']
   push:
     branches: [main]
-    paths: ['deployment/owner_image.py', 'scripts/owner_image.py', 'scripts/check_owner_image_runtime.py', 'fleet/**', '.github/workflows/owner-images.yml', '.github/workflows/owner-image.yml']
+    paths: ['deployment/owner_image.py', 'scripts/owner_image.py', 'scripts/check_owner_image_runtime.py', 'scripts/qualify_plane_runtime.py', 'fleet/**', '.github/workflows/owner-images.yml', '.github/workflows/owner-image.yml']
 permissions:
   contents: read
   actions: read

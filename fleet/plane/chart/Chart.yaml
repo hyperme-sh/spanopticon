@@ -1,0 +1,5 @@
+apiVersion: v2
+name: plane-test-startup
+description: Disposable core plane database startup qualification
+type: application
+version: 0.0.0

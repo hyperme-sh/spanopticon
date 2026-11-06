@@ -1,0 +1,200 @@
+{{- $secret := required "existingSecret is required" .Values.existingSecret -}}
+{{- if not (regexMatch "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$" $secret) }}{{ fail "Invalid secret name" }}{{ end }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: '{{ .Release.Name }}-postgres'
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: '{{ .Release.Name }}'
+      app.kubernetes.io/component: postgres
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/instance: '{{ .Release.Name }}'
+        app.kubernetes.io/component: postgres
+    spec:
+      automountServiceAccountToken: false
+      containers:
+      - name: postgres
+        image: postgres:17@sha256:3b0cda93be7c8dba2ed484d19393d93845dc3dafb88973e248ba8e6d99d784e1
+        env:
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: '{{ $secret }}'
+              key: postgres-password
+        - name: POSTGRES_USER
+          value: plane_test
+        - name: POSTGRES_DB
+          value: plane_test
+        ports:
+        - containerPort: 5432
+        readinessProbe:
+          exec:
+            command:
+            - pg_isready
+            - -U
+            - plane_test
+            - -d
+            - plane_test
+          periodSeconds: 2
+        volumeMounts:
+        - name: data
+          mountPath: /var/lib/postgresql/data
+      volumes:
+      - name: data
+        emptyDir:
+          sizeLimit: 512Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: '{{ .Release.Name }}-postgres'
+spec:
+  selector:
+    app.kubernetes.io/instance: '{{ .Release.Name }}'
+    app.kubernetes.io/component: postgres
+  ports:
+  - port: 5432
+    targetPort: 5432
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: '{{ .Release.Name }}-plane'
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: '{{ .Release.Name }}'
+      app.kubernetes.io/component: plane
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/instance: '{{ .Release.Name }}'
+        app.kubernetes.io/component: plane
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        fsGroup: 65532
+      initContainers:
+      - name: provision
+        image: ghcr.io/hyperme-sh/spanopticon-hypermesh-plane@sha256:95cde2049c460fe37626e4036378bc200099f2f8c93c630b346dc433811fc072
+        imagePullPolicy: IfNotPresent
+        command:
+        - /app/.venv/bin/python
+        - -c
+        - "import os,time; from controlplane_db import migrations; e=migrations._engine(os.environ['DATABASE_URL']);\n\
+          for attempt in range(60):\n try:\n  with e.connect(): pass\n  break\n except\
+          \ Exception:\n  if attempt==59: raise\n  time.sleep(2)\ne.dispose(); migrations.upgrade(os.environ['DATABASE_URL'],\
+          \ ['platform','events','hypermesh'])"
+        env:
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: '{{ $secret }}'
+              key: database-url
+        - name: HYPERMESH_TICKET_HMAC_KEY
+          valueFrom:
+            secretKeyRef:
+              name: '{{ $secret }}'
+              key: ticket-key
+        - name: FASTAPI_ENV
+          value: production
+        - name: PORT
+          value: '8000'
+        - name: PYTHONDONTWRITEBYTECODE
+          value: '1'
+        - name: HYPERMESH_ALLOW_EMPTY_DATABASE
+          value: '1'
+        - name: HYPERMESH_ENROLLMENT_MARKER_PATH
+          value: /tmp/enrollment-marker.json
+        securityContext:
+          readOnlyRootFilesystem: true
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+        volumeMounts:
+        - name: tmp
+          mountPath: /tmp
+      containers:
+      - name: plane
+        image: ghcr.io/hyperme-sh/spanopticon-hypermesh-plane@sha256:95cde2049c460fe37626e4036378bc200099f2f8c93c630b346dc433811fc072
+        imagePullPolicy: IfNotPresent
+        env:
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: '{{ $secret }}'
+              key: database-url
+        - name: HYPERMESH_TICKET_HMAC_KEY
+          valueFrom:
+            secretKeyRef:
+              name: '{{ $secret }}'
+              key: ticket-key
+        - name: FASTAPI_ENV
+          value: production
+        - name: PORT
+          value: '8000'
+        - name: PYTHONDONTWRITEBYTECODE
+          value: '1'
+        - name: HYPERMESH_ALLOW_EMPTY_DATABASE
+          value: '1'
+        - name: HYPERMESH_ENROLLMENT_MARKER_PATH
+          value: /tmp/enrollment-marker.json
+        securityContext:
+          readOnlyRootFilesystem: true
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+        ports:
+        - name: http
+          containerPort: 8000
+        readinessProbe:
+          httpGet:
+            path: /api/v1/hypermesh/classes
+            port: http
+          periodSeconds: 5
+        startupProbe:
+          httpGet:
+            path: /api/v1/hypermesh/classes
+            port: http
+          periodSeconds: 5
+          failureThreshold: 30
+        resources:
+          requests:
+            cpu: 100m
+            memory: 256Mi
+          limits:
+            cpu: '1'
+            memory: 1Gi
+        volumeMounts:
+        - name: tmp
+          mountPath: /tmp
+      volumes:
+      - name: tmp
+        emptyDir:
+          medium: Memory
+          sizeLimit: 32Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: '{{ .Release.Name }}-plane'
+spec:
+  selector:
+    app.kubernetes.io/instance: '{{ .Release.Name }}'
+    app.kubernetes.io/component: plane
+  ports:
+  - port: 8000
+    targetPort: 8000
