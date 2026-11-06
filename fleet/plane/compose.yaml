@@ -1,0 +1,48 @@
+# Disposable test database only. Never point this bootstrap at an existing deployment.
+x-plane: &plane
+  image: ghcr.io/hyperme-sh/spanopticon-hypermesh-plane@sha256:95cde2049c460fe37626e4036378bc200099f2f8c93c630b346dc433811fc072
+  user: '65532:65532'
+  read_only: true
+  cap_drop: [ALL]
+  security_opt: [no-new-privileges:true]
+  tmpfs: ['/tmp:rw,noexec,nosuid,size=33554432,mode=1777']
+  environment: &plane-env
+    DATABASE_URL: postgresql+psycopg://plane_test:${TEST_POSTGRES_PASSWORD:?Provide a disposable test password}@postgres:5432/plane_test
+    HYPERMESH_TICKET_HMAC_KEY: ${TEST_TICKET_KEY:?Provide a disposable test signing key}
+    FASTAPI_ENV: production
+    PYTHONDONTWRITEBYTECODE: '1'
+    PORT: '8000'
+services:
+  postgres:
+    image: postgres:17@sha256:3b0cda93be7c8dba2ed484d19393d93845dc3dafb88973e248ba8e6d99d784e1
+    environment:
+      POSTGRES_USER: plane_test
+      POSTGRES_DB: plane_test
+      POSTGRES_PASSWORD: ${TEST_POSTGRES_PASSWORD:?Provide a disposable test password}
+    tmpfs: ['/var/lib/postgresql/data:rw,size=536870912']
+    healthcheck:
+      test: [CMD-SHELL, 'pg_isready -U plane_test -d plane_test']
+      interval: 2s
+      timeout: 3s
+      retries: 30
+  provision:
+    <<: *plane
+    entrypoint: [/app/.venv/bin/python, -m, controlplane_db.migrations]
+    command: [upgrade, --chain, platform, --chain, events, --chain, hypermesh]
+    depends_on:
+      postgres: {condition: service_healthy}
+  plane:
+    <<: *plane
+    environment:
+      <<: *plane-env
+      HYPERMESH_ALLOW_EMPTY_DATABASE: '1'
+      HYPERMESH_ENROLLMENT_MARKER_PATH: /tmp/enrollment-marker.json
+    depends_on:
+      provision: {condition: service_completed_successfully}
+    ports: ['127.0.0.1::8000']
+    healthcheck:
+      test: [CMD, /app/.venv/bin/python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/v1/hypermesh/classes', timeout=2)"]
+      interval: 5s
+      timeout: 3s
+      retries: 24
+      start_period: 15s

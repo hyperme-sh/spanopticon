@@ -56,6 +56,24 @@ jobs:
       - name: Exercise the real gateway Compose runtime
         if: inputs.owner == 'hypermesh-gateway'
         run: python3 scripts/check_owner_image_runtime.py --directory "$RUNNER_TEMP/owner-image"
+      - name: Install pinned plane qualification tools
+        if: inputs.owner == 'hypermesh-plane'
+        run: |
+          python3 scripts/install_deployment_test_tools.py --output "$RUNNER_TEMP/plane-tools"
+          echo "$RUNNER_TEMP/plane-tools" >> "$GITHUB_PATH"
+      - name: Qualify real plane Compose and Helm database startup
+        if: inputs.owner == 'hypermesh-plane'
+        run: |
+          python3 scripts/qualify_plane_runtime.py --engine compose --directory "$RUNNER_TEMP/owner-image"
+          python3 scripts/qualify_plane_runtime.py --engine helm --directory "$RUNNER_TEMP/owner-image"
+      - name: Retain plane runtime receipts
+        if: inputs.owner == 'hypermesh-plane'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: plane-runtime-qualification-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/owner-image/plane-*.json
+          if-no-files-found: error
+          retention-days: 90
       # Same-run handoff for the publisher below. GHCR keeps the bytes after publication.
       # Pull requests verify only, so they must not retain this multi-hundred-MB image.
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
