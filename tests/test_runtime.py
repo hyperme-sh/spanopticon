@@ -52,7 +52,7 @@ class RuntimeTests(unittest.TestCase):
             document=copy.deepcopy(self.compose);service=document['services']['api']
             if mutate=='image':service['image']='ghcr.io/example/api:test'
             if mutate=='build':service['build']='.'
-            if mutate=='assurance':service['environment']['SPANOPTICON_ASSURANCE_MODE']='stripe-kyc'
+            if mutate=='assurance':service['environment']['SPANOPTICON_ASSURANCE_MODE']='kyc'
             if mutate=='health':service['healthcheck']['disable']=True
             if mutate=='inventory':document['services']['hidden']=service
             if mutate=='hook':service['post_start']=[{'command':'touch /tmp/side-effect'}]

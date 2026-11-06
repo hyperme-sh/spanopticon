@@ -3,8 +3,8 @@ import json
 import re
 from urllib.parse import urlsplit
 
-MODES = {'stripe-kyc': ('stripe_kyc',), 'verification': ('verification',),
-         'both': ('stripe_kyc', 'verification')}
+MODES = {'kyc': ('kyc',), 'verification': ('verification',),
+         'both': ('kyc', 'verification')}
 
 
 def settings(config):
@@ -12,7 +12,7 @@ def settings(config):
         raise ValueError('assurance requires mode and providers')
     mode = config['mode']
     if not isinstance(mode, str) or mode not in MODES:
-        raise ValueError('select stripe-kyc, verification, or both')
+        raise ValueError('select kyc, verification, or both')
     providers = config['providers']
     if not isinstance(providers, dict) or set(providers) != set(MODES[mode]):
         raise ValueError('configure exactly the providers selected by assurance mode')

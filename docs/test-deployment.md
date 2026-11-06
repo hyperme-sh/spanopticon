@@ -60,20 +60,20 @@ selected images. This does not make a malicious repository trustworthy.
 ## Compose plan and apply
 
 Select your actual test Docker context and provision the credential file required
-by the assurance configuration. For `examples/assurance/stripe-kyc.json`, that
-means setting `SPANOPTICON_SECRET_STRIPE_KYC_CLIENT_FILE` to the operator-owned
+by the assurance configuration. For `examples/assurance/kyc.json`, that
+means setting `SPANOPTICON_SECRET_KYC_CLIENT_FILE` to the operator-owned
 file; use the corresponding variable for your configured credential name.
 
 ```sh
 python scripts/deploy_test_bundle.py \
   --bundle ./candidate --engine compose --name example-test \
   --context your-test-docker-context \
-  --assurance-config examples/assurance/stripe-kyc.json --output ./compose-plan
+  --assurance-config examples/assurance/kyc.json --output ./compose-plan
 
 python scripts/deploy_test_bundle.py \
   --bundle ./candidate --engine compose --name example-test \
   --context your-test-docker-context \
-  --assurance-config examples/assurance/stripe-kyc.json --output ./compose-apply \
+  --assurance-config examples/assurance/kyc.json --output ./compose-apply \
   --apply --timeout 180
 ```
 
@@ -95,12 +95,12 @@ apply, and any image-pull credentials required by the chart.
 python scripts/deploy_test_bundle.py \
   --bundle ./candidate --engine helm --name example-test \
   --context your-test-kube-context \
-  --assurance-config examples/assurance/stripe-kyc.json --output ./helm-plan
+  --assurance-config examples/assurance/kyc.json --output ./helm-plan
 
 python scripts/deploy_test_bundle.py \
   --bundle ./candidate --engine helm --name example-test \
   --context your-test-kube-context \
-  --assurance-config examples/assurance/stripe-kyc.json --output ./helm-apply \
+  --assurance-config examples/assurance/kyc.json --output ./helm-apply \
   --apply --timeout 180
 ```
 
@@ -144,7 +144,7 @@ prepare a multi-adapter Compose definition and deterministic Helm chart:
 ```sh
 python scripts/prepare_test_plane.py \
   --metadata ./metadata.json --runtime-config ./runtime.json \
-  --assurance-config examples/assurance/stripe-kyc.json --output ./prepared
+  --assurance-config examples/assurance/kyc.json --output ./prepared
 ```
 
 Metadata uses the fields described below. `runtime.json` must map every component

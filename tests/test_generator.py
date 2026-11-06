@@ -7,7 +7,7 @@ import unittest
 spec = importlib.util.spec_from_file_location("new_plane", Path(__file__).resolve().parents[1] / "scripts/new_plane.py")
 generator = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(generator)
-ASSURANCE = {"mode": "stripe-kyc", "providers": {"stripe_kyc": {"url": "https://payment.example.invalid", "credential_secret": "stripe-kyc-client"}}}
+ASSURANCE = {"mode": "kyc", "providers": {"kyc": {"url": "https://payment.example.invalid", "credential_secret": "kyc-client"}}}
 IMAGE = "registry.example.org/team/plane@sha256:" + "a" * 64
 
 
@@ -54,7 +54,7 @@ class GeneratorTests(unittest.TestCase):
 
     def test_missing_or_invalid_assurance_never_creates_output(self):
         for config in [None, {}, {"mode": "none", "providers": {}},
-                       {"mode": "stripe-kyc", "providers": {}},
+                       {"mode": "kyc", "providers": {}},
                        {"mode": "verification", "providers": ASSURANCE["providers"]}]:
             with self.subTest(config=config), tempfile.TemporaryDirectory() as temp:
                 target = Path(temp) / "out"
@@ -63,9 +63,9 @@ class GeneratorTests(unittest.TestCase):
                 self.assertFalse(target.exists())
 
     def test_provider_matrix_and_required_credentials_in_both_formats(self):
-        for mode, names in [("stripe-kyc", ["stripe_kyc"]),
+        for mode, names in [("kyc", ["kyc"]),
                             ("verification", ["verification"]),
-                            ("both", ["stripe_kyc", "verification"])]:
+                            ("both", ["kyc", "verification"])]:
             config = {"mode": mode, "providers": {n: {
                 "url": "https://" + n.replace("_", "-") + ".example.invalid",
                 "credential_secret": n.replace("_", "-") + "-client"} for n in names}}
@@ -90,10 +90,10 @@ class GeneratorTests(unittest.TestCase):
         for url in ["http://verification.example.invalid", "https://user:secret@example.invalid",
                     "https://example.invalid?token=secret", "https://example.invalid/#fragment"]:
             config = copy.deepcopy(ASSURANCE)
-            config["providers"]["stripe_kyc"]["url"] = url
+            config["providers"]["kyc"]["url"] = url
             with self.subTest(url=url), self.assertRaises(ValueError):
                 generator.manifests("example", IMAGE, config)
         config = copy.deepcopy(ASSURANCE)
-        config["providers"]["stripe_kyc"]["token"] = "never-serialize"
+        config["providers"]["kyc"]["token"] = "never-serialize"
         with self.assertRaises(ValueError):
             generator.manifests("example", IMAGE, config)

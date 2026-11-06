@@ -1,7 +1,6 @@
 """Separate-process HTTP demonstration. Test credentials and no live funds."""
 from contextlib import asynccontextmanager
 from dataclasses import asdict
-import importlib.util
 import json
 import os
 from pathlib import Path
@@ -24,8 +23,6 @@ class IntentRequest(BaseModel):
 def create_app():
     @asynccontextmanager
     async def lifespan(app):
-        if importlib.util.find_spec('stripe') is not None:
-            raise RuntimeError('The sample image must exclude the provider SDK')
         credentials=json.loads(Path(os.environ['SETTLEMENT_TEST_KEYS_FILE']).read_text())
         keys={(row['signer'],row['wallet']):bytes.fromhex(row['key_hex']) for row in credentials}
         app.state.adapter=Adapter(TestProcessor(),test_verifier(keys))

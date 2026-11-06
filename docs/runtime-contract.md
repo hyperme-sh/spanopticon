@@ -23,7 +23,7 @@ qualify them.
 
 ## Deployment assurance
 
-Every generated plane must explicitly select `stripe-kyc`, `verification`, or
+Every generated plane must explicitly select `kyc`, `verification`, or
 `both` through `--assurance-config`. An absent selection, empty provider map or
 incomplete selected provider is rejected before any output is created. Each
 provider declares an HTTPS owner-service URL and an external credential secret;
@@ -32,7 +32,7 @@ owner that evaluates Stripe KYC, not a replacement identity authority or a raw
 Stripe API key. Verification uses its own owner service.
 
 The image must consume `SPANOPTICON_ASSURANCE_MODE`,
-`SPANOPTICON_STRIPE_KYC_URL` / `SPANOPTICON_VERIFICATION_URL` and the corresponding
+`SPANOPTICON_KYC_URL` / `SPANOPTICON_VERIFICATION_URL` and the corresponding
 `*_TOKEN_FILE` paths. Compose requires `SPANOPTICON_SECRET_<SECRET_NAME>_FILE` (uppercase, hyphens
 replaced by underscores) to point to an operator-provisioned file readable by
 UID 65532. An absent or empty path fails Compose interpolation. Kubernetes
@@ -42,11 +42,11 @@ These settings are a plane-adapter contract, not existing payment-service flags.
 Do not assume an arbitrary component image implements them. Runtime integration
 must qualify the adapter before deploying these templates with user traffic.
 
-With `stripe-kyc`, verification is optional and is not configured or called by
+With `kyc`, verification is optional and is not configured or called by
 this policy. With `verification`, a Stripe KYC authority is not required for
 this assurance prerequisite. `both` explicitly requires both authorities;
 unavailability must not silently downgrade the chosen policy. An operator who
-wants Stripe alone chooses `stripe-kyc`, rather than relying on outage fallback.
+wants Stripe alone chooses `kyc`, rather than relying on outage fallback.
 
 A configured endpoint and secret reference establish configuration completeness,
 not provider availability or user verification. The plane adapter must refuse

@@ -1,6 +1,0 @@
-{
-  "mode": "stripe-kyc",
-  "providers": {
-    "stripe_kyc": {"url": "https://payment.example.invalid", "credential_secret": "stripe-kyc-client"}
-  }
-}

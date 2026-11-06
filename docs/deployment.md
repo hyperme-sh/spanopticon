@@ -12,7 +12,7 @@ Inspect `compose.yaml`, configure required service settings through a separate
 Compose override and validate the result:
 
 ```sh
-SPANOPTICON_SECRET_STRIPE_KYC_CLIENT_FILE=/secure/stripe-kyc-client \
+SPANOPTICON_SECRET_KYC_CLIENT_FILE=/secure/kyc-client \
   docker compose -f example-plane/compose.yaml config --quiet
 ```
 
@@ -53,11 +53,11 @@ record credentials or private customer data in public release documentation.
 
 ## Required assurance selection
 
-Use `examples/assurance/stripe-kyc.json` as a configuration shape, replacing its
+Use `examples/assurance/kyc.json` as a configuration shape, replacing its
 `.invalid` URL and provisioning the external credential through your secret
-manager. It contains no usable credential. Supported modes are `stripe-kyc`,
+manager. It contains no usable credential. Supported modes are `kyc`,
 `verification` and `both`. The `providers` object must contain exactly the selected
-keys (`stripe_kyc` and/or `verification`), each with `url` and `credential_secret`.
+keys (`kyc` and/or `verification`), each with `url` and `credential_secret`.
 `render_release.py` also requires `--assurance-config`; neither rendering entry
 point permits a deployment with neither authority selected.
 

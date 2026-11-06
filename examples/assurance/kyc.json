@@ -1,0 +1,6 @@
+{
+  "mode": "kyc",
+  "providers": {
+    "kyc": {"url": "https://payment.example.invalid", "credential_secret": "kyc-client"}
+  }
+}

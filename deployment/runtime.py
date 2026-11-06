@@ -111,7 +111,7 @@ def compose_check(document,lock,assurance):
         b.require(isinstance(environment,dict),'Compose environment must be a mapping')
         if 'SPANOPTICON_ASSURANCE_MODE' in environment:
             adapters+=1
-            b.require({k:v for k,v in environment.items() if k.startswith('SPANOPTICON_ASSURANCE_') or k.startswith('SPANOPTICON_STRIPE_KYC_') or k.startswith('SPANOPTICON_VERIFICATION_')}==expected,'Assurance configuration differs')
+            b.require({k:v for k,v in environment.items() if k.startswith('SPANOPTICON_ASSURANCE_') or k.startswith('SPANOPTICON_KYC_') or k.startswith('SPANOPTICON_VERIFICATION_')}==expected,'Assurance configuration differs')
             mounts=service.get('secrets',[])
             for secret in secrets:
                 matching=[m for m in mounts if m==secret or (isinstance(m,dict) and m.get('source')==secret
@@ -170,7 +170,7 @@ def helm_check(raw,lock,assurance,namespace):
         if 'SPANOPTICON_ASSURANCE_MODE' in env:
             b.require(not container.get('envFrom'),'Assurance envFrom overrides are unsupported')
             adapters+=1
-            actual={k:v for k,v in env.items() if k.startswith('SPANOPTICON_ASSURANCE_') or k.startswith('SPANOPTICON_STRIPE_KYC_') or k.startswith('SPANOPTICON_VERIFICATION_')}
+            actual={k:v for k,v in env.items() if k.startswith('SPANOPTICON_ASSURANCE_') or k.startswith('SPANOPTICON_KYC_') or k.startswith('SPANOPTICON_VERIFICATION_')}
             b.require(actual==expected,'Assurance configuration differs')
             volumes={v['name']:v for v in pod.get('volumes',[])}
             mounts=container.get('volumeMounts',[])
