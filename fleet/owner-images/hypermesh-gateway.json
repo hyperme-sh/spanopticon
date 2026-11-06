@@ -1,0 +1,12 @@
+{
+  "schema": 1,
+  "owner": "hypermesh-gateway",
+  "source_revision": "5abd591aeee98e7779526b5636effb7f2b22fc7c",
+  "run_id": 42156287053,
+  "artifact_id": 13475305882,
+  "artifact_digest": "sha256:33026fb9a1f07ee84781ce30514318420d503e77dd73d3ac48f4e6c94df24770",
+  "archive_digest": "sha256:2024297e44716273c940867cd65f7417adfb2cf56456d10aad0eab28192b24a1",
+  "manifest_digest": "sha256:0c153a653423dfa5598e78c731e2af59dae529234631dd9187ab5c220fe17df9",
+  "config_digest": "sha256:e79c7e0261425a1e0bd3e83528d48a3e7efc3163f8038fefc9c5d15a74b94b63",
+  "destination": "ghcr.io/hyperme-sh/spanopticon-hypermesh-gateway"
+}

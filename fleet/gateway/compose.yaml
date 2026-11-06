@@ -1,0 +1,25 @@
+# Test startup only: no tickets, providers, credentials, or WireGuard activation.
+services:
+  gateway:
+    image: ghcr.io/hyperme-sh/spanopticon-hypermesh-gateway@sha256:0c153a653423dfa5598e78c731e2af59dae529234631dd9187ab5c220fe17df9
+    user: '65532:65532'
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    tmpfs: ['/tmp:rw,noexec,nosuid,size=16777216,mode=1777']
+    restart: unless-stopped
+    environment:
+      PORT: '8000'
+      FASTAPI_ENV: production
+      PYTHONDONTWRITEBYTECODE: '1'
+      HYPERMESH_REQUIRE_KEY_VALIDATE: '1'
+      HYPERMESH_WG_APPLY: '0'
+      HYPERMESH_ASSIGNMENT_REFRESH_S: '0'
+      HYPERMESH_GATEWAY_SERVICE_SECRET: ''
+    ports: ['127.0.0.1:18000:8000']
+    healthcheck:
+      test: [CMD, /app/.venv/bin/python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/v1/health/', timeout=2)"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 10s
