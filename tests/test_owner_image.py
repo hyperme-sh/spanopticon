@@ -72,3 +72,13 @@ class OwnerImageTests(unittest.TestCase):
         with patch.object(cli,'command') as execute:
             with self.assertRaisesRegex(ValueError,'Only the main'):cli.publish(self.value,self.archive,{})
             execute.assert_not_called()
+
+    def test_pinned_oras_missing_manifest_diagnostic(self):
+        spec=importlib.util.spec_from_file_location('owner_cli',Path(__file__).parents[1]/'scripts/owner_image.py')
+        cli=importlib.util.module_from_spec(spec);spec.loader.exec_module(cli)
+        ref='ghcr.io/hyperme-sh/spanopticon-hypermesh-gateway:0.24.0-test.123'
+        self.assertTrue(cli.missing_manifest(f'Error response from registry: failed to find "{ref}": {ref}: not found\n',ref))
+        for error in ('not found','404 proxy not found','MANIFEST_UNKNOWN','NAME_UNKNOWN',
+                      '401 unauthorized','403 forbidden','dial tcp: lookup ghcr.io: no such host',
+                      f'Error response from registry: failed to find "{ref}": another: not found'):
+            with self.subTest(error=error):self.assertFalse(cli.missing_manifest(error,ref))

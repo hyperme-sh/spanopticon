@@ -32,6 +32,15 @@ def download(value,output):
     return receipt
 
 
+
+def missing_manifest(error,reference):
+    # ORAS 1.3.0 maps a registry HEAD 404 to this exact ErrNotFound diagnostic.
+    # Do not accept arbitrary "not found", auth, proxy, or transport errors.
+    return error.strip() == (
+        f'Error response from registry: failed to find "{reference}": {reference}: not found'
+    )
+
+
 def publish(value,archive,env):
     b.require(env.get('GITHUB_REPOSITORY')=='hyperme-sh/spanopticon'
               and env.get('GITHUB_EVENT_NAME')=='push' and env.get('GITHUB_REF')=='refs/heads/main'
@@ -53,7 +62,7 @@ def publish(value,archive,env):
         else:
             # Authentication/transport errors are never treated as absence.
             error=result.stderr.decode(errors='replace')
-            b.require('MANIFEST_UNKNOWN' in error or 'NAME_UNKNOWN' in error or 'not found' in error.lower() and '404' in error,
+            b.require(missing_manifest(error,destination),
                       'Cannot establish whether test tag exists')
             command(['oras','cp','--from-oci-layout',str(archive)+'@'+value['manifest_digest'],destination,'--to-registry-config',config],stdout=subprocess.DEVNULL)
         actual=b.document(command(['oras','manifest','fetch','--descriptor',destination,'--registry-config',config],stdout=subprocess.PIPE))
