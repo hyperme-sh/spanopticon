@@ -7,8 +7,14 @@ platform and every referenced blob. It never rebuilds an image or executes the
 archive. The plane allowlist accepts only the public-core artifact; it excludes
 the billing-enabled integration image.
 
-On main, `owner-images.yml` copies the verified gateway bytes to
-`ghcr.io/hyperme-sh/spanopticon-hypermesh-gateway:0.24.0-test.<run_id>` using the
+`owner-images/hypermesh-plane.json` pins the separately qualified public-core
+plane image, including its OCI index and attestations. It excludes the private
+billing integration and preserves all index children unchanged. Its owner run
+qualifies source, wheel, rebuilt sdist and the actual core image. The coordinator
+verifies this provenance and every byte; it does not claim plane deployment.
+
+On main, `owner-images.yml` copies the verified owner bytes to
+`ghcr.io/hyperme-sh/spanopticon-<owner>:0.24.0-test.<run_id>` using the
 workflow package token, then downloads and hashes every blob. Existing test tags
 must contain identical bytes. No stable tags, Git tags, releases, package visibility
 changes or moving aliases are created. PRs only verify. Pins must be refreshed
@@ -32,8 +38,8 @@ provide no provider or tenant credentials. Health readiness is **not** ticket,
 authentication, routing, assurance or real fleet acceptance. They are not an
 operational gateway configuration. Do not expose them through a public ingress.
 
-There is deliberately no `test.json` admission inventory yet. The public-core
-plane image, dependent service images and actual assurance adapter configuration
+There is deliberately no `test.json` admission inventory yet. The core plane deployment assets,
+dependent service images and actual assurance adapter configuration
 must be qualified together in Compose and Helm before the separate fleet bundle
 publisher can advance its `test` channel. Image publication alone cannot satisfy
 that gate. Chart version `0.0.0` is a source placeholder, not a release.

@@ -10,6 +10,10 @@ permissions:
   actions: read
 jobs:
   verify:
+    strategy:
+      fail-fast: false
+      matrix:
+        owner: [hypermesh-gateway, hypermesh-plane]
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
@@ -19,23 +23,28 @@ jobs:
       - name: Verify owner qualification and every OCI blob
         env:
           GH_TOKEN: ${{ github.token }}
-        run: python3 scripts/owner_image.py download --pin fleet/owner-images/hypermesh-gateway.json --directory "$RUNNER_TEMP/owner-image"
+        run: python3 scripts/owner_image.py download --pin fleet/owner-images/${{ matrix.owner }}.json --directory "$RUNNER_TEMP/owner-image"
       - name: Exercise the real gateway Compose runtime
+        if: matrix.owner == 'hypermesh-gateway'
         run: python3 scripts/check_owner_image_runtime.py --directory "$RUNNER_TEMP/owner-image"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: verified-owner-image-${{ github.run_attempt }}
+          name: verified-owner-image-${{ matrix.owner }}-${{ github.run_attempt }}
           path: ${{ runner.temp }}/owner-image
           if-no-files-found: error
           compression-level: 0
           retention-days: 90
   publish:
+    strategy:
+      fail-fast: false
+      matrix:
+        owner: [hypermesh-gateway, hypermesh-plane]
     needs: verify
     if: github.repository == 'hyperme-sh/spanopticon' && github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     concurrency:
-      group: spanopticon-owner-test-images
+      group: spanopticon-owner-test-images-${{ matrix.owner }}
       cancel-in-progress: false
     permissions:
       contents: read
@@ -46,7 +55,7 @@ jobs:
           persist-credentials: false
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
         with:
-          name: verified-owner-image-${{ github.run_attempt }}
+          name: verified-owner-image-${{ matrix.owner }}-${{ github.run_attempt }}
           path: ${{ runner.temp }}/owner-image
       - uses: oras-project/setup-oras@a379033aa3ed13ed621cce74930b7ef01ec4f743
         with:
@@ -55,10 +64,10 @@ jobs:
         env:
           GHCR_USERNAME: ${{ github.actor }}
           GHCR_TOKEN: ${{ github.token }}
-        run: python3 scripts/owner_image.py publish --pin fleet/owner-images/hypermesh-gateway.json --directory "$RUNNER_TEMP/owner-image"
+        run: python3 scripts/owner_image.py publish --pin fleet/owner-images/${{ matrix.owner }}.json --directory "$RUNNER_TEMP/owner-image"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: owner-image-publication-${{ github.run_attempt }}
+          name: owner-image-publication-${{ matrix.owner }}-${{ github.run_attempt }}
           path: ${{ runner.temp }}/owner-image/publication.json
           if-no-files-found: error
           retention-days: 90
