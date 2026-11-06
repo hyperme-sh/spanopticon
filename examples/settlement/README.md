@@ -14,6 +14,24 @@ binding before effects; retries after a crash must recover the same operation.
 The included `TestProcessor` and HMAC verifier are process-local test doubles.
 They do not move funds and are not production persistence or wallet cryptography.
 
+Set `SETTLEMENT_TEST_LEDGER_FILE` to a writable SQLite file to select
+`DurableTestProcessor` in the HTTP server. Mount its parent directory on persistent
+storage. This processor accepts only asset `TEST` on network `local`; it commits
+the simulated operation and the signer/idempotency binding in the same database
+transaction. A retry after process or container replacement returns the original
+receipt; changing the signed payload for that key returns HTTP 409. Verification
+still runs before replay lookup, including after restart. Losing the ledger loses
+this guarantee. `/health/ready` reports whether durable mode is active.
+
+The local ledger is the entire simulated effect. It does **not** demonstrate
+exactly-once payment on an external rail. A real processor must reconcile ambiguous
+network responses using that rail's durable operation identity before retrying.
+An `accepted` TEST receipt confirms only a local ledger entry, never a transfer.
+
+With the qualified billing wheel installed, run the sample tests with
+`python -m unittest discover -s examples/settlement -v`. They exercise independent
+process contention, restart recovery, conflicting replays, and authority rejection.
+
 Consume authenticated `hypermesh.lease.outcome.v1` envelopes using the registered
 schema and tenant scope. Apply your own settlement policy; the outcome is a fact,
 not an instruction granting authority over a wallet. Keep the processor in your
