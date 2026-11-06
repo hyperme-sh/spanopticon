@@ -1,0 +1,103 @@
+name: Verify and copy one owner test image
+on:
+  workflow_call:
+    inputs:
+      owner:
+        required: true
+        type: string
+    secrets:
+      OWNER_ARTIFACT_APP_PRIVATE_KEY:
+        required: false
+permissions:
+  contents: read
+  actions: read
+jobs:
+  verify:
+    permissions:
+      contents: read
+      actions: read
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      OWNER: ${{ inputs.owner }}
+    steps:
+      - name: Validate fixed owner selection
+        run: |
+          case "$OWNER" in hypermesh-gateway|hypermesh-plane) ;; *) echo 'Unsupported image owner'; exit 1;; esac
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - name: Require trusted context and private owner App configuration
+        if: inputs.owner == 'hypermesh-plane'
+        env:
+          TRUSTED_CONTEXT: ${{ github.event_name == 'push' || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository) }}
+          APP_ID: ${{ vars.OWNER_ARTIFACT_APP_ID }}
+          APP_KEY: ${{ secrets.OWNER_ARTIFACT_APP_PRIVATE_KEY }}
+        run: |
+          test "$TRUSTED_CONTEXT" = true || { echo 'Private owner qualification is unavailable for fork PRs'; exit 1; }
+          test -n "$APP_ID" && test -n "$APP_KEY" || { echo 'Configure OWNER_ARTIFACT_APP_ID and OWNER_ARTIFACT_APP_PRIVATE_KEY with Actions read on hypermesh-plane'; exit 1; }
+      - name: Mint short-lived private owner Actions read token
+        id: owner-token
+        if: >-
+          inputs.owner == 'hypermesh-plane' &&
+          (github.event_name == 'push' ||
+          (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository))
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510
+        with:
+          app-id: ${{ vars.OWNER_ARTIFACT_APP_ID }}
+          private-key: ${{ secrets.OWNER_ARTIFACT_APP_PRIVATE_KEY }}
+          owner: hyperme-sh
+          repositories: hypermesh-plane
+          permission-actions: read
+      - name: Verify owner qualification and every OCI blob
+        env:
+          GH_TOKEN: ${{ inputs.owner == 'hypermesh-plane' && steps.owner-token.outputs.token || github.token }}
+        run: python3 scripts/owner_image.py download --require-owner-token-scope --pin "fleet/owner-images/$OWNER.json" --directory "$RUNNER_TEMP/owner-image"
+      - name: Exercise the real gateway Compose runtime
+        if: inputs.owner == 'hypermesh-gateway'
+        run: python3 scripts/check_owner_image_runtime.py --directory "$RUNNER_TEMP/owner-image"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: verified-owner-image-${{ inputs.owner }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/owner-image
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 90
+  publish:
+    needs: verify
+    if: github.repository == 'hyperme-sh/spanopticon' && github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    concurrency:
+      group: spanopticon-owner-test-images-${{ inputs.owner }}
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      packages: write
+    env:
+      OWNER: ${{ inputs.owner }}
+    steps:
+      - name: Validate fixed owner selection
+        run: |
+          case "$OWNER" in hypermesh-gateway|hypermesh-plane) ;; *) echo 'Unsupported image owner'; exit 1;; esac
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: verified-owner-image-${{ inputs.owner }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/owner-image
+      - uses: oras-project/setup-oras@a379033aa3ed13ed621cce74930b7ef01ec4f743
+        with:
+          version: 1.3.0
+      - name: Copy and read back exact test image bytes
+        env:
+          GHCR_USERNAME: ${{ github.actor }}
+          GHCR_TOKEN: ${{ github.token }}
+        run: python3 scripts/owner_image.py publish --pin "fleet/owner-images/$OWNER.json" --directory "$RUNNER_TEMP/owner-image"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: owner-image-publication-${{ inputs.owner }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/owner-image/publication.json
+          if-no-files-found: error
+          retention-days: 90

@@ -45,3 +45,26 @@ publisher can advance its `test` channel. Image publication alone cannot satisfy
 that gate. Chart version `0.0.0` is a source placeholder, not a release.
 
 See [qualification input requirements](qualification-inputs.md) for the separate bundle inventory and credential contract.
+
+
+## Private owner artifact access
+
+Configure repository variable `OWNER_ARTIFACT_APP_ID` and repository secret
+`OWNER_ARTIFACT_APP_PRIVATE_KEY` for an installed GitHub App with Actions read
+on `hyperme-sh/hypermesh-plane`. The workflow mints a short-lived token with
+only Actions read permission and only that repository, verifies the returned
+repository inventory before downloading, and revokes the token at job cleanup.
+The gateway continues to use the coordinator job token. The artifact credential
+is not passed to the publication job, which uses its own package-write token.
+
+Only main pushes and same-repository PRs may mint private-owner credentials.
+Fork PRs report private qualification unavailable and fail that owner check;
+they do not receive the App key or silently count as qualified. There are no
+required reviewers, environment approvals or branch protection changes.
+
+Each owner's verification and publication run independently, so unavailable
+private-owner access cannot block an otherwise qualified gateway test copy.
+Installing an App or setting its key without granting Actions read is not enough.
+Never substitute a broad personal token or change repository visibility to make
+the check pass. Main private-owner publication remains unavailable until access
+and exact-byte verification succeed.
