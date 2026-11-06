@@ -107,7 +107,8 @@ class OwnerImageTests(unittest.TestCase):
                         uploads.append(step)
         large={'verified-owner-image-${{ inputs.owner }}-${{ github.run_attempt }}','fleet-test-bundle-${{ github.run_attempt }}'}
         small={'owner-image-publication-${{ inputs.owner }}-${{ github.run_attempt }}','fleet-test-publication-${{ github.run_attempt }}',
-               'tested-dist','deployment-runtime-receipts','plane-runtime-qualification-${{ github.run_attempt }}'}
+               'tested-dist','deployment-runtime-receipts','settlement-runtime-receipt',
+               'plane-runtime-qualification-${{ github.run_attempt }}'}
         seen=set()
         for step in uploads:
             name=step['with']['name'];seen.add(name)

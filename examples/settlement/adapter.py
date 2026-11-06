@@ -6,7 +6,7 @@ import hashlib
 import hmac
 from typing import Protocol
 
-from controlplane_billing.settlement import SignedSettlementIntent, SettlementResult
+from .contract import SignedSettlementIntent, SettlementResult
 
 
 class Processor(Protocol):

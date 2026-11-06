@@ -22,6 +22,8 @@ jobs:
           echo "$RUNNER_TEMP/deployment-python/bin" >> "$GITHUB_PATH"
       - run: python3 scripts/check-version-policy.py
       - run: python3 -m unittest discover -s tests -v
+      - name: Verify public settlement contract and durable TEST ledger
+        run: python3 -m unittest discover -s examples/settlement -v
       - name: Verify the reusable workflow executes the tested policy
         run: |
           set -euo pipefail
@@ -57,6 +59,24 @@ jobs:
       baseline-ref: ba386cd5fca08d68604a5c992a09c454c1102d4f
       baseline-manifest: examples/releases/accepted/release.json
       candidate-manifest: examples/releases/candidate/release.json
+
+  settlement-runtime:
+    name: Public TEST settlement Compose sample
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - run: python3 -m examples.settlement.check_sample --receipt "$RUNNER_TEMP/settlement-receipt.json"
+      - name: Retain settlement qualification
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: settlement-runtime-receipt
+          path: ${{ runner.temp }}/settlement-receipt.json
+          if-no-files-found: error
+          retention-days: 90
 
   deployment-runtime:
     name: Compose and Helm test runtime

@@ -3,8 +3,8 @@ from dataclasses import replace
 import hmac
 import unittest
 
-from adapter import Adapter, TestProcessor, test_verifier
-from controlplane_billing.settlement import SettlementIntent, SignedSettlementIntent
+from examples.settlement.adapter import Adapter, TestProcessor, test_verifier
+from examples.settlement.contract import SettlementIntent, SignedSettlementIntent
 
 
 class AdapterTests(unittest.IsolatedAsyncioTestCase):

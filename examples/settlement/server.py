@@ -6,8 +6,9 @@ import os
 from pathlib import Path
 from fastapi import FastAPI,HTTPException
 from pydantic import BaseModel,ConfigDict,Field
-from controlplane_billing.settlement import SettlementIntent,SignedSettlementIntent
+from .contract import SettlementIntent,SignedSettlementIntent
 from .adapter import Adapter,TestProcessor,test_verifier
+from .durable import DurableTestProcessor
 
 class IntentRequest(BaseModel):
     model_config=ConfigDict(extra='forbid',strict=True)
@@ -25,11 +26,15 @@ def create_app():
     async def lifespan(app):
         credentials=json.loads(Path(os.environ['SETTLEMENT_TEST_KEYS_FILE']).read_text())
         keys={(row['signer'],row['wallet']):bytes.fromhex(row['key_hex']) for row in credentials}
-        app.state.adapter=Adapter(TestProcessor(),test_verifier(keys))
+        ledger=os.environ.get('SETTLEMENT_TEST_LEDGER_FILE')
+        processor=DurableTestProcessor(ledger) if ledger else TestProcessor()
+        app.state.adapter=Adapter(processor,test_verifier(keys))
+        app.state.durable=bool(ledger)
         yield
     app=FastAPI(lifespan=lifespan)
     @app.get('/health/ready')
-    def ready():return {'ready':True,'processor':'test-double','live_funds':False}
+    def ready():return {'ready':True,'processor':'test-double','live_funds':False,
+                        'durable':app.state.durable}
     @app.post('/settlements')
     async def settle(body:IntentRequest):
         try:
