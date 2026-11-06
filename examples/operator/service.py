@@ -46,6 +46,7 @@ class Enroll(Strict):
     enroll_token: str
     host_name: str = Field(min_length=1, max_length=128)
     wg_public_key: str
+    device_secret: str = Field(pattern=r"^hm_dev_[A-Za-z0-9_-]{43}$", repr=False)
 
 
 class LeaseCreate(Strict):
@@ -164,16 +165,27 @@ def create_app():
                 raise ValueError("Invalid key")
         except ValueError:
             raise HTTPException(422, "Canonical WireGuard public key required") from None
-        secret = "hm_dev_" + secrets.token_urlsafe(32)
+        secret = body.device_secret
+        token_hash = digest(body.enroll_token)
         try:
             with transaction() as db:
-                row = db.execute("SELECT * FROM devices WHERE enroll_hash=?", (digest(body.enroll_token),)).fetchone()
+                # A consumed token alone grants nothing. Recovery requires the
+                # already-bound device credential and exactly the original request.
+                row = db.execute("SELECT * FROM devices WHERE secret_hash=? AND enrollment_receipt_hash=?",
+                                 (digest(secret), token_hash)).fetchone()
+                if row is not None:
+                    if request.headers.get("X-Tenant-ID") != row["tenant"]:
+                        raise HTTPException(403, "Enrollment tenant differs")
+                    if row["wg_public_key"] != body.wg_public_key or row["host_name"] != body.host_name:
+                        raise HTTPException(409, "Enrollment identity differs")
+                    return {"device_id": row["id"], "device_secret": secret, "credential_prefix": secret[:8], "role": "host"}
+                row = db.execute("SELECT * FROM devices WHERE enroll_hash=?", (token_hash,)).fetchone()
                 if row is None:
                     raise HTTPException(401, "Enrollment token consumed or unknown")
                 if request.headers.get("X-Tenant-ID") != row["tenant"]:
                     raise HTTPException(403, "Enrollment tenant differs")
-                db.execute("UPDATE devices SET enroll_hash=NULL,secret_hash=?,wg_public_key=?,host_name=? WHERE id=?",
-                           (digest(secret), body.wg_public_key, body.host_name, row["id"]))
+                db.execute("UPDATE devices SET enroll_hash=NULL,enrollment_receipt_hash=?,secret_hash=?,wg_public_key=?,host_name=? WHERE id=?",
+                           (token_hash, digest(secret), body.wg_public_key, body.host_name, row["id"]))
         except sqlite3.IntegrityError:
             raise HTTPException(409, "WireGuard identity already enrolled") from None
         return {"device_id": row["id"], "device_secret": secret, "credential_prefix": secret[:8], "role": "host"}

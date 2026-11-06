@@ -24,10 +24,13 @@ The run verifies this sequence:
    verifies the Ed25519 signature, issuer, audience, expiry and tenant, then checks
    its membership permissions. Other tenants and organizations are denied.
 2. The owner registers a host and receives a one-use enrollment token. The host
-   container generates its own X25519 key, enrolls its public key, persists its
-   device credential, and heartbeats. Private host keys stay on that host. Reusing
-   the enrollment token and substituting a person token for a device credential
-   are rejected.
+   container generates its own X25519 key and device credential, durably writes
+   them in a mode-0600 file, then enrolls and heartbeats. Private host keys stay on
+   that host. A consumed token alone cannot enroll again: recovery requires the
+   bound credential and the exact tenant, token, host name and public key. The
+   smoke discards the committed reply and terminates the host, replaces the
+   operator, and verifies that the restarted host recovers the same identity.
+   Changed retries and person tokens at device endpoints are rejected.
 3. The same organization creates a one-hour self-use reservation. A heartbeat is
    required. The host executes a bounded CPU subprocess inside its restricted
    container and reports the result with its device credential. A durable lease

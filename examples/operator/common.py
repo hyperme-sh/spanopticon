@@ -45,6 +45,10 @@ def initialize():
             serial TEXT NOT NULL, enroll_hash TEXT UNIQUE, secret_hash TEXT UNIQUE,
             wg_public_key TEXT UNIQUE, host_name TEXT, heartbeat REAL,
             UNIQUE(tenant, serial))""")
+        columns = {row["name"] for row in db.execute("PRAGMA table_info(devices)")}
+        if "enrollment_receipt_hash" not in columns:
+            db.execute("ALTER TABLE devices ADD COLUMN enrollment_receipt_hash TEXT")
+        db.execute("CREATE UNIQUE INDEX IF NOT EXISTS enrollment_receipt ON devices(enrollment_receipt_hash)")
         db.execute("""CREATE TABLE IF NOT EXISTS leases (
             id TEXT PRIMARY KEY, tenant TEXT NOT NULL, subject TEXT NOT NULL,
             device TEXT NOT NULL, request_id TEXT NOT NULL, request TEXT NOT NULL,

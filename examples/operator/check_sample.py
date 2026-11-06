@@ -97,6 +97,7 @@ except urllib.error.HTTPError as exc:
         prefix = "/api/v1/hypermesh"
         try:
             run("up", "-d", "--build", "--wait", "--wait-timeout", "90", "identity", "operator", "settlement")
+            run("exec", "-T", "operator", "python", "-m", "unittest", "discover", "-s", "examples/operator/tests", "-v")
             call("identity", "/token", {"username": "owner", "password": "wrong"}, expected=401)
             tokens = {name: call("identity", "/token", {"username": name, "password": password})["access_token"]
                       for name, password in passwords.items()}
@@ -116,10 +117,27 @@ except urllib.error.HTTPError as exc:
             request = {"device_id": device["id"], "request_id": "self-use-one", "self_use": True, "reserved_hours": 1}
             call("operator", prefix + "/leases", request, token=owner, expected=409)
             write("host.json", {"tenant_id": tenant, "enroll_token": device["issued_enroll_token"]})
+            probe = subprocess.run(compose + ["--profile", "host", "run", "--build", "--rm", "--no-deps", "host",
+                "python", "-m", "examples.operator.tests.enrollment_probe"], env=env, capture_output=True, text=True)
+            if probe.returncode != 73:
+                raise AssertionError("Lost-response probe did not reach its committed enrollment exit")
+            run("up", "-d", "--no-deps", "--force-recreate", "--wait", "operator")
             run("--profile", "host", "up", "-d", "--build", "--wait", "--wait-timeout", "90", "host")
+            run("exec", "-T", "host", "python", "-c", """import json,hashlib
+from pathlib import Path
+identity=json.loads(Path('/state/host.json').read_text())
+proof=json.loads(Path('/state/lost-response-proof.json').read_text())
+assert identity['enrollment_pending'] is False
+assert 'enroll_token' not in identity
+assert identity['device_id']==proof['device_id']
+assert hashlib.sha256(identity['device_secret'].encode()).hexdigest()==proof['credential_hash']
+assert hashlib.sha256(identity['wg_private_key'].encode()).hexdigest()==proof['private_key_hash']
+assert Path('/state/host.json').stat().st_mode & 0o777 == 0o600
+""")
             call("operator", prefix + "/agent/heartbeat", {}, token=owner, expected=401)
             call("operator", prefix + "/agent/enroll", {"enroll_token": device["issued_enroll_token"],
-                "host_name": "replay", "wg_public_key": base64.b64encode(b"a" * 32).decode()}, expected=401)
+                "host_name": "replay", "wg_public_key": base64.b64encode(b"a" * 32).decode(),
+                "device_secret": "hm_dev_" + secrets.token_urlsafe(32)}, expected=401)
             call("operator", prefix + "/leases", request, token=outsider, expected=403)
             call("operator", prefix + "/leases", request | {"self_use": False}, token=owner, expected=422)
             # Complete work while the adapter is unavailable, then replace the
@@ -134,10 +152,17 @@ except urllib.error.HTTPError as exc:
                 {"host_org_id": other_organization, "serial": "foreign-credential-fixture"}, token=outsider, expected=201)
             public_key = run("exec", "-T", "operator", "python", "-c",
                 "import sqlite3; print(sqlite3.connect('/state/operator.sqlite3').execute('SELECT wg_public_key FROM devices WHERE id=?',(" + repr(device["id"]) + ",)).fetchone()[0])", capture=True)
-            enrollment = {"enroll_token": foreign["issued_enroll_token"], "host_name": "foreign-fixture", "wg_public_key": public_key}
+            enrollment = {"enroll_token": foreign["issued_enroll_token"], "host_name": "foreign-fixture", "wg_public_key": public_key,
+                          "device_secret": "hm_dev_" + secrets.token_urlsafe(32)}
             call("operator", prefix + "/agent/enroll", enrollment, expected=409)
-            foreign_host = call("operator", prefix + "/agent/enroll", enrollment | {
-                "wg_public_key": base64.b64encode(hashlib.sha256(b"foreign-public-key-fixture").digest()).decode()})
+            enrollment["wg_public_key"] = base64.b64encode(hashlib.sha256(b"foreign-public-key-fixture").digest()).decode()
+            foreign_host = call("operator", prefix + "/agent/enroll", enrollment)
+            assert call("operator", prefix + "/agent/enroll", enrollment) == foreign_host
+            for change, expected in (({"device_secret": "hm_dev_" + secrets.token_urlsafe(32)}, 401),
+                                     ({"host_name": "changed"}, 409), ({"wg_public_key": public_key}, 409),
+                                     ({"enroll_token": device["issued_enroll_token"]}, 401)):
+                call("operator", prefix + "/agent/enroll", enrollment | change, expected=expected)
+            call("operator", prefix + "/agent/enroll", enrollment, tenant_id=str(uuid.uuid4()), expected=403)
             result = {"sha256": hashlib.sha256(b"cedar-self-use-workload-v1").hexdigest(), "exit_code": 0}
             call("operator", prefix + "/agent/jobs/" + lease["id"] + "/result", result,
                  token=foreign_host["device_secret"], expected=404)
@@ -171,6 +196,8 @@ except urllib.error.HTTPError as exc:
                 "import importlib.util; assert all(importlib.util.find_spec(p) is None for p in ('controlplane_billing','payment_service'))")
             receipt.update(complete=True, identity_verified=True, tenant_and_organization_denials=True,
                 one_use_enrollment=True, host_executed_job=True, unbilled_self_use=True,
+                enrollment_lost_response_recovered=True, enrollment_identity_preserved=True,
+                changed_enrollment_retries_denied=True,
                 duplicate_host_key_denied=True, foreign_host_result_denied=True, conflicting_lease_retry_denied=True,
                 durable_event=terminal["event"], settlement=settled["settlement"],
                 response_loss_replay=True, settlement_operations=1,
