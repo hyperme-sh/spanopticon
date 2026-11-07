@@ -206,3 +206,25 @@ The CI rehearsal uses a separate SSH server container and filesystem, discards
 the local archive and Compose volumes, and starts the service from the retained
 replica. Configure expiry separately for any snapshots or object-store copies
 of that filesystem.
+
+### Expire versioned S3 backups
+
+On the backup host, install boto3 and use an identity scoped to the backup
+bucket and prefix. Preview with the command below. Choose the retention window
+and schedule the same command with `--apply` to remove eligible version IDs.
+
+```sh
+python3 -m verification.s3_expiry "$bucket" 'verification/cold/' --retention-days 30
+```
+
+Use a dedicated, versioning-enabled prefix and finalized archive names as above.
+Serialize pruning with replication and other writers to that prefix. The cutoff
+uses the capture time in the archive name for all its versions. Data versions
+are removed before delete markers. A failed deletion stops the run and can be
+retried. Object Lock retention and legal holds remain effective. The operator
+needs GetBucketVersioning, ListBucketVersions and DeleteObjectVersion access.
+
+Record the exact bucket, key, version ID and SHA-256 at backup time in independent
+custody. Fetch that version, verify its digest and replay the current erasure
+authority before serving restored data. Test the procedure against each actual
+storage provider and separately account for replicas and storage snapshots.

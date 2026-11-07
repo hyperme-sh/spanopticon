@@ -20,6 +20,17 @@ jobs:
       - run: bash verification/qualify_backup_ssh.sh
       - run: python3 -m unittest discover -s tests -p test_operator_delivery.py
       - run: python3 -m verification.qualify_operator
+  versioned-backups:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - run: |
+          python3 -m venv "$RUNNER_TEMP/backup-tests"
+          "$RUNNER_TEMP/backup-tests/bin/pip" install 'moto[s3]==5.1.11' 'boto3==1.38.46'
+          "$RUNNER_TEMP/backup-tests/bin/python" -m verification.qualify_s3
   keycloak-helm:
     strategy:
       fail-fast: false
