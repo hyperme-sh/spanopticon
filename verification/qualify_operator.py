@@ -75,10 +75,12 @@ def main():
                 first = request(endpoint, body=address, key=key, token=owner)
                 cid = first["challenge_id"]
                 assert request(endpoint, body=address, key=key, token=owner) == first
-                query = ("import sqlite3,sys; print(sqlite3.connect('/state/contact.db').execute("
-                         "'SELECT dispatch FROM challenge WHERE id=?',(sys.argv[1],)).fetchone()[0])")
                 for _ in range(30):
-                    if compose("exec", "-T", "worker", "python", "-c", query, cid) == status:
+                    record = json.loads(compose("exec", "-T", "worker", "python", "-m",
+                                                "verification.inspect_delivery", cid))
+                    assert set(record) == {"challenge_id", "dispatch", "state", "expires_at"}
+                    assert record["challenge_id"] == cid and record["expires_at"] == first["expires_at"]
+                    if record["dispatch"] == status:
                         break
                     time.sleep(0.3)
                 else:
