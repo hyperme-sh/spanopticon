@@ -10,7 +10,18 @@ mkdir "$DOCKER_CONFIG"
 out="$RUNNER_TEMP/published-deployment"
 mkdir -p "$out"
 project="registry-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
-compose=(docker compose -p "$project" -f fleet/gateway/compose.yaml -f fleet/plane/compose.yaml)
+# Exercise proposed assets when their owner pins still match the publication.
+# A new owner pin gets its own pre-publication checks in owner-images.yml.
+declare -A assets
+for owner in gateway plane; do
+  pin="fleet/owner-images/hypermesh-$owner.json"
+  if cmp -s "$pin" "published/$pin"; then
+    assets[$owner]="fleet/$owner"
+  else
+    assets[$owner]="published/fleet/$owner"
+  fi
+done
+compose=(docker compose -p "$project" -f "${assets[gateway]}/compose.yaml" -f "${assets[plane]}/compose.yaml")
 forward_pid=
 cluster_created=false
 compose_started=false
@@ -32,7 +43,7 @@ PY
 unset GHCR_TOKEN
 export TEST_POSTGRES_PASSWORD=$(openssl rand -hex 24) TEST_TICKET_KEY=$(openssl rand -hex 32)
 for owner in gateway plane; do
-  pin="fleet/owner-images/hypermesh-$owner.json"
+  pin="published/fleet/owner-images/hypermesh-$owner.json"
   image=$(jq -er .destination "$pin")
   expected=$(jq -er .manifest_digest "$pin")
   docker buildx imagetools inspect --raw "$image:$CANDIDATE" > "$scratch/$owner.manifest"
@@ -57,11 +68,11 @@ print(json.dumps({'apiVersion':'v1','kind':'Secret','metadata':{'name':'plane-te
                   'stringData':{'postgres-password':password,'ticket-key':os.environ['TEST_TICKET_KEY'],
                                 'database-url':f'postgresql+psycopg://plane_test:{password}@plane-postgres:5432/plane_test'}}))
 PY
-  helm install gateway fleet/gateway/chart --wait --timeout 3m
-  helm install plane fleet/plane/chart --set existingSecret=plane-test --wait --timeout 4m
+  helm install gateway "${assets[gateway]}/chart" --wait --timeout 3m
+  helm install plane "${assets[plane]}/chart" --set existingSecret=plane-test --wait --timeout 4m
 fi
 for owner in gateway plane; do
-  pin="fleet/owner-images/hypermesh-$owner.json"
+  pin="published/fleet/owner-images/hypermesh-$owner.json"
   expected=$(jq -er '.destination+"@"+.manifest_digest' "$pin")
   source=$(jq -er .source_revision "$pin")
   if [[ $ENGINE == compose ]]; then
@@ -84,6 +95,6 @@ for owner in gateway plane; do
   fi
   if [[ -n $forward_pid ]]; then kill "$forward_pid"; wait "$forward_pid" || true; forward_pid=; fi
   jq -n --arg owner "$owner" --arg engine "$ENGINE" --arg candidate "$CANDIDATE" --arg image "$expected" \
-    --arg source "$source" --arg revision "$GITHUB_SHA" \
-    '{owner:$owner,engine:$engine,candidate:$candidate,image:$image,source_revision:$source,workflow_revision:$revision,health_and_identity_verified:true}' > "$out/$owner.json"
+    --arg source "$source" --arg revision "$GITHUB_SHA" --arg publication "$PUBLICATION_REVISION" --arg assets "${assets[$owner]}" \
+    '{owner:$owner,engine:$engine,candidate:$candidate,image:$image,source_revision:$source,workflow_revision:$revision,publication_revision:$publication,assets_path:$assets,health_and_identity_verified:true}' > "$out/$owner.json"
 done
