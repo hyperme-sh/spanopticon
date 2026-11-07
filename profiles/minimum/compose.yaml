@@ -1,0 +1,40 @@
+x-runtime: &runtime
+  build:
+    context: ../..
+    dockerfile: profiles/minimum/Dockerfile
+  read_only: true
+  cap_drop: [ALL]
+  security_opt: [no-new-privileges:true]
+  healthcheck:
+    test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://localhost:8000/health/ready', timeout=3)"]
+    interval: 3s
+    timeout: 5s
+    retries: 20
+services:
+  identity:
+    <<: *runtime
+    profiles: [local-issuer]
+    command: [uvicorn, examples.operator.identity:create_app, --factory, --host, 0.0.0.0]
+    environment:
+      IDENTITY_PRIVATE_KEY_FILE: /config/key
+      IDENTITY_ACCOUNTS_FILE: /config/accounts
+    volumes:
+      - ${MINIMUM_CONFIG:?}/issuer.key:/config/key:ro
+      - ${MINIMUM_CONFIG:?}/accounts.json:/config/accounts:ro
+    ports: ['127.0.0.1::8000']
+  api:
+    <<: *runtime
+    command: [uvicorn, profiles.minimum.service:app, --host, 0.0.0.0]
+    environment:
+      IDENTITY_PUBLIC_KEY_FILE: /config/pub
+      IDENTITY_ALGORITHM: ${IDENTITY_ALGORITHM:-EdDSA}
+      IDENTITY_ISSUER: ${IDENTITY_ISSUER:-https://cedar.test/identity}
+      IDENTITY_AUDIENCE: ${IDENTITY_AUDIENCE:-cedar-operator}
+      MINIMUM_TENANT: ${MINIMUM_TENANT:?}
+      MINIMUM_DATABASE: /state/tenant.db
+    volumes:
+      - ${MINIMUM_CONFIG:?}/issuer.pub:/config/pub:ro
+      - state:/state
+    ports: ['127.0.0.1::8000']
+volumes:
+  state: {}
