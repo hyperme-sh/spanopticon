@@ -1,0 +1,71 @@
+name: Deploy published GHCR test images
+on:
+  workflow_dispatch:
+    inputs:
+      candidate:
+        description: Published GHCR test label for both pinned owner images
+        required: true
+        default: 0.24.0-test.42292637351
+  pull_request:
+    paths:
+      - '.github/workflows/published-test-deployment.yml'
+      - 'scripts/check_published_deployment.sh'
+      - 'scripts/qualify_plane_runtime.py'
+      - 'fleet/gateway/**'
+      - 'fleet/plane/**'
+      - 'fleet/owner-images/**'
+permissions:
+  contents: read
+  packages: read
+  actions: read
+jobs:
+  deploy:
+    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      CANDIDATE: ${{ inputs.candidate || '0.24.0-test.42292637351' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        engine: [compose, helm]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - name: Resolve candidate to its successful publication commit
+        id: publication
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          [[ $CANDIDATE =~ ^0\.24\.0-test\.([1-9][0-9]*)$ ]]
+          run_id=${BASH_REMATCH[1]}
+          revision=$(gh api "repos/hyperme-sh/spanopticon/actions/runs/$run_id" | jq -er '
+            select(.path == ".github/workflows/owner-images.yml" and
+                   .event == "push" and .head_branch == "main" and .conclusion == "success")
+            | .head_sha | select(test("^[0-9a-f]{40}$"))')
+          echo "revision=$revision" >> "$GITHUB_OUTPUT"
+      - name: Check out pins and deployment assets used for publication
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ steps.publication.outputs.revision }}
+          path: published
+          sparse-checkout: fleet
+          persist-credentials: false
+      - if: matrix.engine == 'helm'
+        run: |
+          python3 scripts/install_deployment_test_tools.py --output "$RUNNER_TEMP/deployment-tools"
+          echo "$RUNNER_TEMP/deployment-tools" >> "$GITHUB_PATH"
+      - name: Pull and deploy both published owner images
+        env:
+          GHCR_TOKEN: ${{ github.token }}
+          PUBLICATION_REVISION: ${{ steps.publication.outputs.revision }}
+          ENGINE: ${{ matrix.engine }}
+        run: bash scripts/check_published_deployment.sh
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: published-test-deployment-${{ matrix.engine }}
+          path: ${{ runner.temp }}/published-deployment/*.json
+          if-no-files-found: error
+          retention-days: 90
