@@ -1,0 +1,4 @@
+apiVersion: v2
+name: contact-verification
+description: Tenant-scoped verification API with local mailbox delivery
+version: 0.0.0
