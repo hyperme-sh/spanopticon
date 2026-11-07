@@ -2,7 +2,7 @@ name: Public contact verification
 on:
   workflow_dispatch:
   pull_request:
-    paths: ['verification/**', 'tests/test_local_verification.py', 'tests/test_operator_delivery.py', 'examples/operator/**', 'profiles/minimum/setup.py', 'profiles/minimum/keycloak_check.py', 'scripts/install_deployment_test_tools.py', '.github/workflows/local-verification.yml']
+    paths: ['verification/**', 'tests/test_local_verification.py', 'tests/test_verification_backup_expiry.py', 'tests/test_operator_delivery.py', 'examples/operator/**', 'profiles/minimum/setup.py', 'profiles/minimum/keycloak_check.py', 'scripts/install_deployment_test_tools.py', '.github/workflows/local-verification.yml']
 permissions:
   contents: read
 jobs:
@@ -15,6 +15,7 @@ jobs:
           persist-credentials: false
       - run: python3 -m unittest discover -s tests -p test_local_verification.py
       - run: python3 -m unittest discover -s tests -p test_verification_erasure.py
+      - run: python3 -m unittest discover -s tests -p test_verification_backup_expiry.py
       - run: python3 -m verification.qualify
       - run: python3 -m unittest discover -s tests -p test_operator_delivery.py
       - run: python3 -m verification.qualify_operator
