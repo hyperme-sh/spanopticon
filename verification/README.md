@@ -143,3 +143,27 @@ The local worker also reconciles orphan messages before dispatch.
 If switching delivery modes, reconcile every retained local mailbox in local
 mode. Isolate archived snapshots from ordinary access until expiry. Apply the
 provider's own erasure procedure to messages it has already accepted.
+
+### Expire local backup archives
+
+Choose a retention window in whole days for the installation. Keep completed
+cold archives in an operator-owned, mode-0700 directory on a protected local
+filesystem. Write each backup to a private temporary file and rename it into
+place only after the backup command succeeds. Use the UTC capture time and a
+fresh lowercase UUID without dashes in the final name, for example
+`verification-20261107T120000Z-efad988e6f0d495ba9ed572eed74f482.tar`.
+Preserve that name when copying an archive so its original expiry still applies.
+
+Preview eligible archives with the command below. Add `--apply` to unlink them.
+Schedule apply at the interval required by your retention policy. Every finalized
+archive at or beyond the chosen age is eligible, including the last one.
+The command scans only the specified directory and leaves symlinks, directories
+and partial archives alone.
+
+```sh
+python3 -m verification.backup_expiry "$archive_directory" --retention-days "$retention_days"
+```
+
+Apply retention independently to replicas, object versions and storage snapshots.
+Unlinking a local file does not erase those copies. Keep the current erasure
+authority separately and replay it before bringing any restored archive online.
