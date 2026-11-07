@@ -22,15 +22,7 @@ def service_tokens(cfg, issuer):
     return tokens
 
 
-def main(cfg, issuer, api):
-    tokens = service_tokens(cfg, issuer)
-    challenges = api + "/v1/challenges"
-    params = {"body": {"address": "operator@example.test"}, "key": str(uuid4())}
-    request(challenges, token=tokens["wrong-audience"], expected=401, **params)
-    owner = tokens["owner"]
-    challenge = request(challenges, token=owner, **params)
-    assert request(challenges, token=owner, **params) == challenge
-    cid = challenge["challenge_id"]
+def mailbox_code(cid):
     query = ("import sqlite3, sys; db=sqlite3.connect('/mailbox/inbox.db'); "
              "row=db.execute('SELECT code FROM message WHERE id=?',(sys.argv[1],)).fetchone(); "
              "print(row[0] if row else '')")
@@ -38,18 +30,37 @@ def main(cfg, issuer, api):
         code = subprocess.check_output(["kubectl", "exec", "deployment/contact", "-c", "worker", "--",
                                         "python", "-c", query, cid], text=True, timeout=15).strip()
         if code:
-            break
+            return code
         time.sleep(1)
-    else:
-        raise RuntimeError("Local delivery timed out")
+    raise RuntimeError("Local delivery timed out")
+
+
+def main(cfg, issuer, api, restored=False):
+    tokens = service_tokens(cfg, issuer)
+    if restored:
+        cid = (cfg / "restore-challenge-id").read_text()
+        assert request(api + "/v1/evidence", token=tokens["owner"])["verified"]
+        assert not request(api + "/v1/evidence", token=tokens["other"])["verified"]
+        request(api + "/v1/challenges/" + cid + "/complete", token=tokens["owner"],
+                body={"code": mailbox_code(cid)}, expected=400)
+        return
+    challenges = api + "/v1/challenges"
+    params = {"body": {"address": "operator@example.test"}, "key": str(uuid4())}
+    request(challenges, token=tokens["wrong-audience"], expected=401, **params)
+    owner = tokens["owner"]
+    challenge = request(challenges, token=owner, **params)
+    assert request(challenges, token=owner, **params) == challenge
+    cid = challenge["challenge_id"]
+    code = mailbox_code(cid)
     complete = f"{challenges}/{cid}/complete"
     answer = {"code": code}
     request(complete, token=tokens["other"], body=answer, expected=400)
     request(complete, token=owner, body=answer)
     request(complete, token=owner, body=answer, expected=400)
+    (cfg / "restore-challenge-id").write_text(cid)
     assert request(api + "/v1/evidence", token=owner)["verified"]
     assert not request(api + "/v1/evidence", token=tokens["other"])["verified"]
 
 
 if __name__ == "__main__":
-    main(Path(sys.argv[1]), sys.argv[2], sys.argv[3])
+    main(Path(sys.argv[1]), sys.argv[2], sys.argv[3], sys.argv[4:] == ["--restored"])
