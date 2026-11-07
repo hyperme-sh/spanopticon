@@ -228,3 +228,30 @@ Record the exact bucket, key, version ID and SHA-256 at backup time in independe
 custody. Fetch that version, verify its digest and replay the current erasure
 authority before serving restored data. Test the procedure against each actual
 storage provider and separately account for replicas and storage snapshots.
+
+### Retain and recover verification archives in Azure Blob Storage
+
+Use a private, versioning-enabled block blob container. Record the account,
+container, blob name, upload version ID and SHA-256 independently of the archive.
+The sample lifecycle rule in `azure/retention-rule.json` covers finalized archive
+names under `verification-backups/cold/verification-`. Reserve that prefix for
+completed uploads. Merge the rule into the storage account's existing lifecycle
+policy and set the three retention periods to the installation's requirements.
+
+The example uses 30 days since modification for current blobs and 30 days since
+creation for previous versions and snapshots. Copying an old archive into Azure
+starts a new storage-age window. Lifecycle processing is asynchronous. Account
+soft-delete retention can keep expired bytes recoverable beyond that window.
+[Azure lifecycle deletion](https://learn.microsoft.com/en-us/azure/storage/blobs/lifecycle-management-policy-delete)
+
+Authenticate Azure CLI with the recovery identity and give it blob read access
+on the backup container. Download the recorded version to a new file:
+
+```sh
+bash verification/azure/fetch-version.sh "$account" "$container" "$blob" \
+  "$version_id" "$trusted_sha256" "$destination"
+```
+
+The command exposes the destination only after the bytes match the trusted
+digest. Restore into isolation and replay the current erasure authority before
+starting verification workers or serving requests.

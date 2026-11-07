@@ -2,7 +2,7 @@ name: Public contact verification
 on:
   workflow_dispatch:
   pull_request:
-    paths: ['verification/**', 'tests/test_local_verification.py', 'tests/test_verification_backup_expiry.py', 'tests/test_verification_backup_replica.py', 'tests/test_operator_delivery.py', 'examples/operator/**', 'profiles/minimum/setup.py', 'profiles/minimum/keycloak_check.py', 'scripts/install_deployment_test_tools.py', '.github/workflows/local-verification.yml']
+    paths: ['verification/**', 'tests/test_local_verification.py', 'tests/test_verification_backup_expiry.py', 'tests/test_verification_backup_replica.py', 'tests/test_verification_azure_backup.py', 'tests/test_operator_delivery.py', 'examples/operator/**', 'profiles/minimum/setup.py', 'profiles/minimum/keycloak_check.py', 'scripts/install_deployment_test_tools.py', '.github/workflows/local-verification.yml']
 permissions:
   contents: read
 jobs:
@@ -27,6 +27,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false
+      - run: python3 -m unittest discover -s tests -p test_verification_azure_backup.py
       - run: |
           python3 -m venv "$RUNNER_TEMP/backup-tests"
           "$RUNNER_TEMP/backup-tests/bin/pip" install 'moto[s3]==5.1.11' 'boto3==1.38.46'
