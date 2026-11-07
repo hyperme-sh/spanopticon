@@ -55,6 +55,19 @@ Synthetic .test addresses are enabled by default. In operator mode `VERIFICATION
 
 Run `python3 -m verification.qualify_operator` on Linux with Docker Compose to exercise a separately running socket adapter, successful proof, explicit rejection, a lost acknowledgement, restart and cross-subject budget exhaustion. The fixture uses synthetic addresses and holds codes in memory.
 
+### Reconcile an uncertain delivery
+
+From the deployed Compose project, use the same configuration, project name and environment as at startup. Look up the challenge ID from the issuance response.
+
+```sh
+docker compose -f verification/compose.yaml -f verification/compose.operator.yaml \
+  exec -T worker python -m verification.inspect_delivery "$CHALLENGE_ID"
+```
+
+The lookup opens the database read-only and returns the ID, dispatch status, challenge state and Unix expiry. A missing operator delivery exits with status 1. Check the operator adapter's durable receipt under the same ID. Keep recipients and codes out of incident records.
+
+A `claimed` dispatch may still be running. Repeat the lookup after the worker finishes or recovers. If it remains claimed, or is `ambiguous`, record whether the adapter accepted, rejected or has no record of that ID. Even an adapter acceptance receipt establishes only delivery responsibility. Leave the challenge and dispatch rows intact. If the user still needs proof, have them request a fresh challenge with a new request key and complete that challenge within its expiry. Replaying the old request key returns the original challenge. Normal issuance limits apply.
+
 ## Operator delivery on Kubernetes
 
 Use the verification chart with Kubernetes native sidecar support. The default delivery mode is the local mailbox. To run an operator adapter, supply these additional Helm values:
