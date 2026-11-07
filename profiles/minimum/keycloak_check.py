@@ -12,7 +12,7 @@ from uuid import uuid4
 from client import get_tenant
 
 
-def prepare(directory):
+def prepare(directory, audience="minimum-api"):
     directory.mkdir(mode=0o700)
     tenant = str(uuid4())
     clients, users, credentials = [], [], {}
@@ -31,7 +31,7 @@ def prepare(directory):
                  "config": {"claim.name": "tenant_id", "claim.value": str(uuid4()) if name == "other" else tenant,
                             "jsonType.label": "String", "access.token.claim": "true"}},
                 {"name": "audience", "protocol": "openid-connect", "protocolMapper": "oidc-audience-mapper",
-                 "config": {"included.custom.audience": "other-api" if name == "wrong-audience" else "minimum-api",
+                 "config": {"included.custom.audience": "other-api" if name == "wrong-audience" else audience,
                             "access.token.claim": "true"}}]})
     realm = directory / "realm.json"
     realm.write_text(json.dumps({"realm": "minimum", "enabled": True, "sslRequired": "none",
@@ -73,9 +73,10 @@ if __name__ == "__main__":
     parser.add_argument("directory", type=Path)
     parser.add_argument("--issuer")
     parser.add_argument("--api")
+    parser.add_argument("--audience", default="minimum-api")
     args = parser.parse_args()
     if args.action == "prepare":
-        prepare(args.directory)
+        prepare(args.directory, args.audience)
     elif args.action == "trust":
         trust(args.directory, args.issuer)
     else:

@@ -1,0 +1,103 @@
+{{- $image := required "image is required" .Values.image -}}
+{{- if not (regexMatch "^[^@[:space:]]+@sha256:[a-f0-9]{64}$" $image) -}}
+{{- fail "image must be digest-pinned" -}}
+{{- end }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ .Release.Name }}-data
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests: {storage: 128Mi}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}
+spec:
+  replicas: 1
+  strategy: {type: Recreate}
+  selector:
+    matchLabels: {app.kubernetes.io/instance: {{ .Release.Name }}}
+  template:
+    metadata:
+      labels: {app.kubernetes.io/instance: {{ .Release.Name }}}
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+        seccompProfile: {type: RuntimeDefault}
+      initContainers:
+        - name: migrate
+          image: {{ $image | quote }}
+          command: [python, -m, verification.store]
+          securityContext: &restricted
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: [ALL]}
+          env:
+            - &db {name: VERIFICATION_DB, value: /state/contact.db}
+          volumeMounts:
+            - &state {name: data, mountPath: /state, subPath: state}
+      containers:
+        - name: api
+          image: {{ $image | quote }}
+          command: [uvicorn, verification.service:app, --host, 0.0.0.0]
+          securityContext: *restricted
+          readinessProbe:
+            httpGet: {path: /health/ready, port: 8000}
+          env:
+            - *db
+            - &secret {name: VERIFICATION_KEY_FILE, value: /config/secret}
+            - {name: IDENTITY_PUBLIC_KEY_FILE, value: /config/issuer.pub}
+            - {name: IDENTITY_ALGORITHM, value: RS256}
+            - {name: IDENTITY_ISSUER, value: {{ required "issuer is required" .Values.issuer | quote }}}
+            - {name: IDENTITY_AUDIENCE, value: {{ required "audience is required" .Values.audience | quote }}}
+          volumeMounts:
+            - *state
+            - {name: api-keys, mountPath: /config, readOnly: true}
+        - name: worker
+          image: {{ $image | quote }}
+          securityContext: *restricted
+          command: [python, -m, verification.worker]
+          env:
+            - *db
+            - *secret
+            - {name: VERIFICATION_MAILBOX, value: /mailbox/inbox.db}
+          volumeMounts:
+            - *state
+            - {name: data, mountPath: /mailbox, subPath: mailbox}
+            - {name: worker-key, mountPath: /config, readOnly: true}
+      volumes:
+        - name: data
+          persistentVolumeClaim: {claimName: {{ .Release.Name }}-data}
+        - name: api-keys
+          secret:
+            secretName: {{ required "existingSecret is required" .Values.existingSecret }}
+            items: [{key: issuer.pub, path: issuer.pub}, {key: secret, path: secret}]
+        - name: worker-key
+          secret:
+            secretName: {{ .Values.existingSecret }}
+            items: [{key: secret, path: secret}]
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Release.Name }}
+spec:
+  selector: {app.kubernetes.io/instance: {{ .Release.Name }}}
+  ports: [{port: 8000, targetPort: 8000}]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ .Release.Name }}-local-delivery
+spec:
+  podSelector:
+    matchLabels: {app.kubernetes.io/instance: {{ .Release.Name }}}
+  policyTypes: [Egress]
+  egress: []

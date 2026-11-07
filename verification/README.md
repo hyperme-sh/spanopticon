@@ -32,3 +32,11 @@ Keep this mode-0700 directory outside source control and preserve the secret acr
 The local worker alone mounts the mailbox volume. For test inspection, query its SQLite message table by challenge ID inside that container. Codes expire after ten minutes and the worker purges expired messages. Challenge issuance is limited to ten per scope per hour. Evidence lasts one day. The storage migration is explicit (`python -m verification.store`), transactional and safe to repeat. Schema versions beyond 1 require an updated migrator. The service database retains contact addresses and challenge metadata. Set a retention and deletion policy before adapting it for real contacts.
 
 The API and worker use the public challenge core in `challenge.py`. SQLite serializes contact changes, failed attempts, success and worker claims. Local delivery commits the mailbox row and delivered marker in one attached-database transaction with SQLite's default rollback journals. Keep both attached databases on storage supporting SQLite locking and atomic commits. The sample sends no email or SMS.
+
+## Kubernetes with an external issuer
+
+Use `verification/chart` with a digest-pinned application image, the exact Keycloak realm issuer URL, a dedicated verification audience, and an existing Kubernetes Secret containing the realm RSA public key as `issuer.pub` and the service's 32-byte secret as `secret`. The API checks RS256 tokens with a subject and tenant claim. Provision and rotate the trusted public key through the Secret and restart the deployment after rotation.
+
+The chart uses a single-replica Recreate deployment. Its init container applies migrations before the API and worker start. Both use SQLite on one ReadWriteOnce PVC, with a separate mailbox subdirectory mounted only by the worker. Use a storage class with SQLite-compatible locking. Helm uninstall removes the chart-managed claim. The API is a ClusterIP service. The chart requests egress denial for the pod, which requires a network-policy-capable CNI for enforcement.
+
+Run `bash verification/qualify-helm.sh` from the repository root with Docker, kind, kubectl, Helm, jq, OpenSSL and Python 3. It exercises the full local-delivery journey in a disposable cluster using genuine Keycloak client credentials. The test issuer listens on host loopback and its public key is provisioned before installation.
