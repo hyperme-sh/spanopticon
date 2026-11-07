@@ -1,0 +1,16 @@
+{
+  "name": "expireVerificationBackups",
+  "enabled": true,
+  "type": "Lifecycle",
+  "definition": {
+    "filters": {
+      "blobTypes": ["blockBlob"],
+      "prefixMatch": ["verification-backups/cold/verification-"]
+    },
+    "actions": {
+      "baseBlob": {"delete": {"daysAfterModificationGreaterThan": 30}},
+      "version": {"delete": {"daysAfterCreationGreaterThan": 30}},
+      "snapshot": {"delete": {"daysAfterCreationGreaterThan": 30}}
+    }
+  }
+}

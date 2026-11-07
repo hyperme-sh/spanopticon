@@ -206,3 +206,52 @@ The CI rehearsal uses a separate SSH server container and filesystem, discards
 the local archive and Compose volumes, and starts the service from the retained
 replica. Configure expiry separately for any snapshots or object-store copies
 of that filesystem.
+
+### Expire versioned S3 backups
+
+On the backup host, install boto3 and use an identity scoped to the backup
+bucket and prefix. Preview with the command below. Choose the retention window
+and schedule the same command with `--apply` to remove eligible version IDs.
+
+```sh
+python3 -m verification.s3_expiry "$bucket" 'verification/cold/' --retention-days 30
+```
+
+Use a dedicated, versioning-enabled prefix and finalized archive names as above.
+Serialize pruning with replication and other writers to that prefix. The cutoff
+uses the capture time in the archive name for all its versions. Data versions
+are removed before delete markers. A failed deletion stops the run and can be
+retried. Object Lock retention and legal holds remain effective. The operator
+needs GetBucketVersioning, ListBucketVersions and DeleteObjectVersion access.
+
+Record the exact bucket, key, version ID and SHA-256 at backup time in independent
+custody. Fetch that version, verify its digest and replay the current erasure
+authority before serving restored data. Test the procedure against each actual
+storage provider and separately account for replicas and storage snapshots.
+
+### Retain and recover verification archives in Azure Blob Storage
+
+Use a private, versioning-enabled block blob container. Record the account,
+container, blob name, upload version ID and SHA-256 independently of the archive.
+The sample lifecycle rule in `azure/retention-rule.json` covers finalized archive
+names under `verification-backups/cold/verification-`. Reserve that prefix for
+completed uploads. Merge the rule into the storage account's existing lifecycle
+policy and set the three retention periods to the installation's requirements.
+
+The example uses 30 days since modification for current blobs and 30 days since
+creation for previous versions and snapshots. Copying an old archive into Azure
+starts a new storage-age window. Lifecycle processing is asynchronous. Account
+soft-delete retention can keep expired bytes recoverable beyond that window.
+[Azure lifecycle deletion](https://learn.microsoft.com/en-us/azure/storage/blobs/lifecycle-management-policy-delete)
+
+Authenticate Azure CLI with the recovery identity and give it blob read access
+on the backup container. Download the recorded version to a new file:
+
+```sh
+bash verification/azure/fetch-version.sh "$account" "$container" "$blob" \
+  "$version_id" "$trusted_sha256" "$destination"
+```
+
+The command exposes the destination only after the bytes match the trusted
+digest. Restore into isolation and replay the current erasure authority before
+starting verification workers or serving requests.
