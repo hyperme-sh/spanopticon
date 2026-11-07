@@ -1,10 +1,11 @@
 """Exercise authenticated HTTP delivery through a separate synthetic adapter."""
-from collections import Counter
+from contextlib import closing
 import json
 import os
 from pathlib import Path
 import secrets
 import socket
+import sqlite3
 import subprocess
 import tempfile
 from threading import Event, Thread
@@ -29,7 +30,9 @@ def main():
         server.listen()
         server.settimeout(0.2)
         stop = Event()
-        calls = Counter()
+        receipts = root / "provider-receipts.db"
+        with closing(sqlite3.connect(receipts)) as db:
+            db.execute("CREATE TABLE submission (challenge_id TEXT, status TEXT)")
         codes = {}
 
         def serve():
@@ -41,12 +44,13 @@ def main():
                 with peer:
                     msg = json.loads(peer.recv(8192))
                     cid = msg["challenge_id"]
-                    calls[cid] += 1
                     codes[cid] = msg["code"]
                     kind = msg["recipient"].split("@")[0]
+                    status = "rejected" if kind == "reject" else "accepted"
+                    with closing(sqlite3.connect(receipts)) as db, db:
+                        db.execute("INSERT INTO submission VALUES (?,?)", (cid, status))
                     if kind == "lost":
                         continue
-                    status = "rejected" if kind == "reject" else "accepted"
                     peer.sendall(json.dumps({"version": 1, "challenge_id": cid, "status": status}).encode())
 
         thread = Thread(target=serve)
@@ -60,6 +64,17 @@ def main():
                                            "-f", "verification/compose.operator.yaml", *args],
                                           text=True, env=env, timeout=360).strip()
 
+        def archive_state(snapshot, restore=False):
+            cmd = ["docker", "compose", "-p", project, "-f", "verification/compose.yaml",
+                   "run", "--rm", "--no-deps", "-T", "migrate", "tar", "-C", "/state"]
+            if restore:
+                snapshot.seek(0)
+                subprocess.run(cmd + ["--no-same-owner", "-xf", "-"], stdin=snapshot,
+                               env=env, check=True, timeout=60)
+            else:
+                subprocess.run(cmd + ["-cf", "-", "."], stdout=snapshot, env=env, check=True, timeout=60)
+
+        snapshot = tempfile.TemporaryFile()
         try:
             compose("build", "api")
             compose("up", "--no-build", "-d", "--wait")
@@ -72,9 +87,17 @@ def main():
             for name, status in (("ok", "accepted"), ("reject", "rejected"), ("lost", "ambiguous")):
                 address = {"address": name + "@sample.test"}
                 key = str(uuid4())
+                if name == "lost":
+                    compose("stop", "worker")
                 first = request(endpoint, body=address, key=key, token=owner)
                 cid = first["challenge_id"]
                 assert request(endpoint, body=address, key=key, token=owner) == first
+                if name == "lost":
+                    compose("stop", "api")
+                    archive_state(snapshot)
+                    compose("up", "-d", "--wait")
+                    api = "http://" + compose("port", "api", "8000")
+                    endpoint = api + "/v1/challenges"
                 for _ in range(30):
                     record = json.loads(compose("exec", "-T", "worker", "python", "-m",
                                                 "verification.inspect_delivery", cid))
@@ -96,8 +119,25 @@ def main():
             request(endpoint, body={"address": "new@sample.test"}, key=str(uuid4()), token=tokens["other"], expected=429)
             compose("restart", "worker")
             time.sleep(3)
-            assert len(calls) == 3 and all(count == 1 for count in calls.values())
+            with closing(sqlite3.connect(receipts)) as db:
+                assert db.execute("SELECT count(*), count(DISTINCT challenge_id) FROM submission").fetchone() == (3, 3)
+            # The adapter saw the send, but the snapshot still shows it as queued.
+            compose("down", "--volumes")
+            archive_state(snapshot, restore=True)
+            compose("run", "--rm", "--no-deps", "migrate", "python", "-m", "verification.recover_operator")
+            compose("up", "-d", "--wait")
+            api = "http://" + compose("port", "api", "8000")
+            assert request(api + "/v1/challenges", body=address, key=key, token=owner) == first
+            record = json.loads(compose("exec", "-T", "worker", "python", "-m",
+                                        "verification.inspect_delivery", cid))
+            assert record["state"] == "superseded" and record["dispatch"] == "queued"
+            request(api + "/v1/challenges/" + cid + "/complete", body={"code": codes[cid]},
+                    token=owner, expected=400)
+            assert not request(api + "/v1/evidence", token=owner)["verified"]
+            with closing(sqlite3.connect(receipts)) as db:
+                assert db.execute("SELECT status FROM submission WHERE challenge_id=?", (cid,)).fetchall() == [("accepted",)]
         finally:
+            snapshot.close()
             stop.set()
             thread.join(3)
             compose("down", "--volumes")
