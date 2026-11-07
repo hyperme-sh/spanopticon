@@ -167,3 +167,42 @@ python3 -m verification.backup_expiry "$archive_directory" --retention-days "$re
 Apply retention independently to replicas, object versions and storage snapshots.
 Unlinking a local file does not erase those copies. Keep the current erasure
 authority separately and replay it before bringing any restored archive online.
+
+### Keep an off-host filesystem replica over SSH
+
+Provision a dedicated backup account on a Linux SSH host with Python 3.11 or
+later. Install the matching verification modules on its Python path, give the
+account a private mode-0700 `archives` directory and pin its host key in the
+client SSH configuration. Use encrypted storage and restrict the account to
+the backup operator. Keep the trusted archive name, SHA-256 digest and current
+erasure authority separately from this replica.
+
+For a completed cold archive, use its original finalized name and trusted
+digest. The following uses a configured SSH alias named `verification-backup`.
+The receiver verifies the stream before atomically publishing a new archive.
+A duplicate name fails without overwriting the existing copy.
+
+```sh
+ssh -o BatchMode=yes -o StrictHostKeyChecking=yes verification-backup \
+  python3 -m verification.backup_replica put archives "$name" "$sha256" < "$archive"
+ssh verification-backup python3 -m verification.backup_expiry archives --retention-days 30
+```
+
+Choose the retention window for this host and schedule the same expiry command
+with `--apply`. Its cutoff uses snapshot time even for a newly transferred
+copy. For recovery, download into a new private temporary file. Check both the
+SSH exit status and the independently held digest before restoring the archive
+in isolation and replaying the current erasure authority.
+
+```sh
+umask 077
+snapshot=$(mktemp)
+ssh -o BatchMode=yes -o StrictHostKeyChecking=yes verification-backup \
+  python3 -m verification.backup_replica get archives "$name" "$sha256" > "$snapshot" &&
+  printf '%s  %s\n' "$sha256" "$snapshot" | sha256sum --check
+```
+
+The CI rehearsal uses a separate SSH server container and filesystem, discards
+the local archive and Compose volumes, and starts the service from the retained
+replica. Configure expiry separately for any snapshots or object-store copies
+of that filesystem.
