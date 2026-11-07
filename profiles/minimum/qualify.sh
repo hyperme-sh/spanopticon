@@ -5,6 +5,7 @@ root=$(mktemp -d)
 project="minimum-$(basename "$root" | tr '[:upper:].' '[:lower:]-')"
 engine=${1:?choose compose or helm}
 profile=profiles/minimum
+sha256sum --check "$profile/deployment.sha256"
 compose=(docker compose --project-name "$project" --env-file "$root/config/compose.env" -f "$profile/compose.yaml" --profile local-issuer)
 pids=()
 cleanup() {
