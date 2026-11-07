@@ -14,6 +14,7 @@ jobs:
         with:
           persist-credentials: false
       - run: python3 -m unittest discover -s tests -p test_local_verification.py
+      - run: python3 -m unittest discover -s tests -p test_verification_erasure.py
       - run: python3 -m verification.qualify
       - run: python3 -m unittest discover -s tests -p test_operator_delivery.py
       - run: python3 -m verification.qualify_operator
