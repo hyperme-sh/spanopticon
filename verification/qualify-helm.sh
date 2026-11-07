@@ -54,15 +54,25 @@ fi
 kubectl create secret generic verification-config --from-file="$cfg/issuer.pub" --from-file="$cfg/secret"
 helm install contact verification/chart --set-string image="$pinned" --set existingSecret=verification-config \
   --set-string issuer="$issuer" --set audience=verification-api "${adapter_options[@]}" --wait --timeout 3m
-kubectl port-forward service/contact :8000 > "$root/forward.log" 2>&1 &
-forward=$!
-for attempt in {1..30}; do
-  grep -q 'Forwarding from 127.0.0.1:' "$root/forward.log" && break
-  sleep 1
-done
-endpoint=$(sed -n 's/^Forwarding from \(127.0.0.1:[0-9]*\).*/\1/p' "$root/forward.log" | head -1)
+start_forward() {
+  kubectl port-forward service/contact :8000 > "$root/forward.log" 2>&1 &
+  forward=$!
+  for attempt in {1..30}; do
+    grep -q 'Forwarding from 127.0.0.1:' "$root/forward.log" && break
+    sleep 1
+  done
+  endpoint=$(sed -n 's/^Forwarding from \(127.0.0.1:[0-9]*\).*/\1/p' "$root/forward.log" | head -1)
+  [[ -n $endpoint ]]
+}
+start_forward
 if [[ $mode == operator ]]; then
   python3 -m verification.operator_helm_check "$cfg" "$issuer" "http://$endpoint" "$node"
 else
   python3 -m verification.keycloak_helm_check "$cfg" "$issuer" "http://$endpoint"
+  kill "$forward"
+  wait "$forward" || true
+  forward=
+  python3 -m verification.helm_recovery "$cfg" "$issuer"
+  start_forward
+  python3 -m verification.helm_recovery "$cfg" "$issuer" "http://$endpoint"
 fi

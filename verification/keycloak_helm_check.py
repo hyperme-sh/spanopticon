@@ -22,6 +22,20 @@ def service_tokens(cfg, issuer):
     return tokens
 
 
+def mailbox_code(cid):
+    query = ("import sqlite3, sys; db=sqlite3.connect('/mailbox/inbox.db'); "
+             "row=db.execute('SELECT code FROM message WHERE id=?',(sys.argv[1],)).fetchone(); "
+             "print(row[0] if row else '')")
+    for _ in range(30):
+        code = subprocess.check_output(["kubectl", "exec", "deployment/contact", "-c", "worker", "--",
+                                        "python", "-c", query, cid], text=True, timeout=15).strip()
+        if code:
+            return code
+        time.sleep(1)
+    else:
+        raise RuntimeError("Local delivery timed out")
+
+
 def main(cfg, issuer, api):
     tokens = service_tokens(cfg, issuer)
     challenges = api + "/v1/challenges"
@@ -31,17 +45,7 @@ def main(cfg, issuer, api):
     challenge = request(challenges, token=owner, **params)
     assert request(challenges, token=owner, **params) == challenge
     cid = challenge["challenge_id"]
-    query = ("import sqlite3, sys; db=sqlite3.connect('/mailbox/inbox.db'); "
-             "row=db.execute('SELECT code FROM message WHERE id=?',(sys.argv[1],)).fetchone(); "
-             "print(row[0] if row else '')")
-    for _ in range(30):
-        code = subprocess.check_output(["kubectl", "exec", "deployment/contact", "-c", "worker", "--",
-                                        "python", "-c", query, cid], text=True, timeout=15).strip()
-        if code:
-            break
-        time.sleep(1)
-    else:
-        raise RuntimeError("Local delivery timed out")
+    code = mailbox_code(cid)
     complete = f"{challenges}/{cid}/complete"
     answer = {"code": code}
     request(complete, token=tokens["other"], body=answer, expected=400)
@@ -49,6 +53,10 @@ def main(cfg, issuer, api):
     request(complete, token=owner, body=answer, expected=400)
     assert request(api + "/v1/evidence", token=owner)["verified"]
     assert not request(api + "/v1/evidence", token=tokens["other"])["verified"]
+    other_id = request(challenges, token=tokens["other"], body={"address": "peer@example.test"},
+                       key=str(uuid4()))["challenge_id"]
+    request(f"{challenges}/{other_id}/complete", token=tokens["other"], body={"code": mailbox_code(other_id)})
+
 
 
 if __name__ == "__main__":
