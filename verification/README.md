@@ -87,3 +87,9 @@ Implement the socket protocol documented above. The chart sets VERIFICATION_ADAP
 The existing pod egress-deny policy also applies in operator mode. A local adapter needs only the Unix socket. For a network provider, the cluster operator must configure suitable outbound access with a policy-capable CNI. Kubernetes NetworkPolicy egress grants apply to the entire pod. Scope access to the required gateway or move provider transport behind a separately secured relay where appropriate.
 
 Run `bash verification/qualify-helm.sh operator` with the prerequisites above. The CI fixture is a separate digest-pinned image using synthetic addresses. The test obtains Keycloak tokens, checks accepted, rejected, timed-out and disconnected sends, and inspects the adapter's test receipts after a worker container restart. The fixture exercises all three hourly budgets against the shared database.
+
+### Rehearse a cold restore in Compose
+
+Run `python3 -m verification.qualify` from the repository root. In its disposable project, the rehearsal stops the API and worker, archives both SQLite volume directories together, removes the project volumes, and restores the archive into fresh volumes before starting migration and services. It reuses the original issuer and verification key. It checks tenant-scoped evidence, rejection of an already consumed code and completion of a pending challenge using its restored mailbox entry.
+
+The archive contains contact data and short-lived codes. The rehearsal uses synthetic contacts and a temporary archive. For an operator backup, protect the archive and retain the corresponding configuration and keys separately. Restore into isolation first. The snapshot reflects the instant writers stopped. Reconcile later contact changes, deletions, consumed challenges and adapter deliveries before serving traffic from an older snapshot.
