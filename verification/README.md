@@ -45,7 +45,7 @@ Run `bash verification/qualify-helm.sh` from the repository root with Docker, ki
 
 Start an adapter under your control on the Linux Docker host. It listens on an AF_UNIX SOCK_SEQPACKET socket named `delivery.sock` in a trusted directory. Restrict directory and socket permissions to the operator and worker UID (10001) or a dedicated group. A process with socket access can impersonate a delivery client or read submitted codes. Keep the adapter's provider credentials and logs outside the verification containers. Avoid logging request payloads.
 
-Set `VERIFICATION_ADAPTER_DIRECTORY` to the absolute socket directory, then add `-f verification/compose.operator.yaml` after the base Compose file on setup and runtime commands. The overlay selects operator mode on the API and worker and mounts the socket directory only into the worker. Schema migration 002 preserves earlier rows as local-test delivery. Stop old API and worker processes before migrating a persistent deployment and back up its database first. The Helm chart currently deploys the local mailbox mode.
+Set `VERIFICATION_ADAPTER_DIRECTORY` to the absolute socket directory, then add `-f verification/compose.operator.yaml` after the base Compose file on setup and runtime commands. The overlay selects operator mode on the API and worker and mounts the socket directory only into the worker. Schema migration 002 preserves earlier rows as local-test delivery. Stop old API and worker processes before migrating a persistent deployment and back up its database first. Helm operators can deploy the same socket protocol with the sidecar configuration below.
 
 Each request is one UTF-8 JSON packet with version (integer 1), challenge_id (UUID and adapter idempotency key), recipient, six-digit code and expires_at (Unix seconds). Accept only unexpired requests. The adapter must deduplicate challenge IDs and return one JSON packet of at most 1024 bytes containing version, the matching challenge_id, and status `accepted` or `rejected`. Acknowledge acceptance after the adapter has durably accepted responsibility for delivery. Completion still requires presentation of the correct code. Evidence records `operator-delivery` separately from historical local-mailbox evidence.
 
@@ -54,3 +54,23 @@ The worker commits its claim before calling the socket. A rejection fails closed
 Synthetic .test addresses are enabled by default. In operator mode `VERIFICATION_RECIPIENT_DOMAINS` accepts a comma-separated allowlist of lowercase exact domains for other recipients. The API enforces rolling one-hour limits per authenticated subject scope (10), per literal lowercase recipient across subjects and tenants (3), and for the entire shared service database (100). The Compose overlay accepts positive integer overrides through VERIFICATION_LIMIT_SUBJECT, VERIFICATION_LIMIT_RECIPIENT and VERIFICATION_LIMIT_OPERATOR. The existing five-attempt completion limit remains per challenge. Exact idempotent retries consume no extra budget. Alias normalization beyond lowercase input and coordination across independent service databases are operator concerns.
 
 Run `python3 -m verification.qualify_operator` on Linux with Docker Compose to exercise a separately running socket adapter, successful proof, explicit rejection, a lost acknowledgement, restart and cross-subject budget exhaustion. The fixture uses synthetic addresses and holds codes in memory.
+
+## Operator delivery on Kubernetes
+
+Use the verification chart with Kubernetes native sidecar support. The default delivery mode is the local mailbox. To run an operator adapter, supply these additional Helm values:
+
+```yaml
+delivery:
+  mode: operator
+  adapterImage: registry.example.org/team/adapter@sha256:<64 lowercase hex digits>
+  startupCommand: ["/app/adapter-health", "socket-ready"]
+  existingAdapterSecret: provider-credentials
+  recipientDomains: [example.org]
+  hourlyLimits: {subject: 10, recipient: 3, operator: 100}
+```
+
+Implement the socket protocol documented above. The chart sets VERIFICATION_ADAPTER_SOCKET to /adapter/delivery.sock. The adapter runs as UID/GID 10001 with a read-only root filesystem and a writable memory-backed socket directory. Its startup command must succeed only once the listener can accept work. The worker starts after that probe passes and mounts the directory read-only. The optional adapter-specific Secret mounts as files under /credentials only in the adapter. The adapter receives neither the API keys nor the verification PVC.
+
+The existing pod egress-deny policy also applies in operator mode. A local adapter needs only the Unix socket. For a network provider, the cluster operator must configure suitable outbound access with a policy-capable CNI. Kubernetes NetworkPolicy egress grants apply to the entire pod. Scope access to the required gateway or move provider transport behind a separately secured relay where appropriate.
+
+Run `bash verification/qualify-helm.sh operator` with the prerequisites above. The CI fixture is a separate digest-pinned image using synthetic addresses. The test obtains Keycloak tokens, checks accepted, rejected, timed-out and disconnected sends, and inspects the adapter's test receipts after a worker container restart. The fixture exercises all three hourly budgets against the shared database.

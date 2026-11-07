@@ -2,6 +2,17 @@
 {{- if not (regexMatch "^[^@[:space:]]+@sha256:[a-f0-9]{64}$" $image) -}}
 {{- fail "image must be digest-pinned" -}}
 {{- end }}
+{{- $delivery := .Values.delivery }}
+{{- if not (has $delivery.mode (list "local" "operator")) }}{{ fail "unknown delivery mode" }}{{ end }}
+{{- $operator := eq $delivery.mode "operator" }}
+{{- if $operator }}
+{{- if not (regexMatch "^[^@[:space:]]+@sha256:[a-f0-9]{64}$" $delivery.adapterImage) }}{{ fail "adapterImage must be digest-pinned" }}{{ end }}
+{{- if empty $delivery.startupCommand }}{{ fail "provide adapter startupCommand" }}{{ end }}
+{{- if and $delivery.existingAdapterSecret (eq $delivery.existingAdapterSecret .Values.existingSecret) }}{{ fail "use a separate adapter secret" }}{{ end }}
+{{- range $name := list "subject" "recipient" "operator" }}
+{{- if not (regexMatch "^[1-9][0-9]*$" (toString (index $delivery.hourlyLimits $name))) }}{{ fail "hourly limits must be positive integers" }}{{ end }}
+{{- end }}
+{{- end }}
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
@@ -43,6 +54,23 @@ spec:
             - &db {name: VERIFICATION_DB, value: /state/contact.db}
           volumeMounts:
             - &state {name: data, mountPath: /state, subPath: state}
+        {{- if $operator }}
+        - name: adapter
+          restartPolicy: Always
+          image: {{ $delivery.adapterImage | quote }}
+          securityContext: *restricted
+          startupProbe:
+            exec: {command: {{ $delivery.startupCommand | toJson }}}
+            periodSeconds: 2
+            failureThreshold: 30
+          env:
+            - {name: VERIFICATION_ADAPTER_SOCKET, value: /adapter/delivery.sock}
+          volumeMounts:
+            - {name: adapter-socket, mountPath: /adapter}
+            {{- if $delivery.existingAdapterSecret }}
+            - {name: adapter-secret, mountPath: /credentials, readOnly: true}
+            {{- end }}
+        {{- end }}
       containers:
         - name: api
           image: {{ $image | quote }}
@@ -53,6 +81,13 @@ spec:
           env:
             - *db
             - &secret {name: VERIFICATION_KEY_FILE, value: /config/secret}
+            {{- if $operator }}
+            - &mode {name: VERIFICATION_DELIVERY_MODE, value: operator}
+            - {name: VERIFICATION_RECIPIENT_DOMAINS, value: {{ join "," $delivery.recipientDomains | quote }}}
+            {{- range $name, $limit := $delivery.hourlyLimits }}
+            - {name: VERIFICATION_LIMIT_{{ $name | upper }}, value: {{ $limit | quote }}}
+            {{- end }}
+            {{- end }}
             - {name: IDENTITY_PUBLIC_KEY_FILE, value: /config/issuer.pub}
             - {name: IDENTITY_ALGORITHM, value: RS256}
             - {name: IDENTITY_ISSUER, value: {{ required "issuer is required" .Values.issuer | quote }}}
@@ -67,12 +102,29 @@ spec:
           env:
             - *db
             - *secret
+            {{- if $operator }}
+            - *mode
+            - {name: VERIFICATION_ADAPTER_SOCKET, value: /adapter/delivery.sock}
+            {{- else }}
             - {name: VERIFICATION_MAILBOX, value: /mailbox/inbox.db}
+            {{- end }}
           volumeMounts:
             - *state
+            {{- if $operator }}
+            - {name: adapter-socket, mountPath: /adapter, readOnly: true}
+            {{- else }}
             - {name: data, mountPath: /mailbox, subPath: mailbox}
+            {{- end }}
             - {name: worker-key, mountPath: /config, readOnly: true}
       volumes:
+        {{- if $operator }}
+        - name: adapter-socket
+          emptyDir: {medium: Memory, sizeLimit: 8Mi}
+        {{- if $delivery.existingAdapterSecret }}
+        - name: adapter-secret
+          secret: {secretName: {{ $delivery.existingAdapterSecret | quote }}}
+        {{- end }}
+        {{- end }}
         - name: data
           persistentVolumeClaim: {claimName: {{ .Release.Name }}-data}
         - name: api-keys

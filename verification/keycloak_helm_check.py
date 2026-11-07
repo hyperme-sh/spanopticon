@@ -11,7 +11,7 @@ from uuid import uuid4
 from verification.qualify import request
 
 
-def main(cfg, issuer, api):
+def service_tokens(cfg, issuer):
     tokens = {}
     for name, secret in json.loads((cfg / "credentials.json").read_text()).items():
         form = urlencode({"grant_type": "client_credentials", "client_id": "minimum-" + name,
@@ -19,6 +19,11 @@ def main(cfg, issuer, api):
         with urlopen(issuer + "/protocol/openid-connect/token", data=form, timeout=10) as response:
             tokens[name] = json.load(response)["access_token"]
 
+    return tokens
+
+
+def main(cfg, issuer, api):
+    tokens = service_tokens(cfg, issuer)
     challenges = api + "/v1/challenges"
     params = {"body": {"address": "operator@example.test"}, "key": str(uuid4())}
     request(challenges, token=tokens["wrong-audience"], expected=401, **params)
