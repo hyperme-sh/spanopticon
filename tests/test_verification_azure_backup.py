@@ -42,3 +42,40 @@ Path(args[args.index('--file') + 1]).write_bytes(b'backup')
                 self.assertEqual(dest.exists(), expected == digest)
             self.assertEqual(dest.read_bytes(), b"backup")
             self.assertFalse(list(root.glob(".verification-restore.*")))
+
+    def test_recover_retired_subject_from_previous_version(self):
+        from unittest.mock import patch
+        from verification.qualify_azure import qualify
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            work = root / "work"
+            work.mkdir()
+            az = root / "az"
+            az.write_text("""#!/usr/bin/env python3
+import json, os, sys
+from pathlib import Path
+args = sys.argv[1:]
+def arg(name):
+    return args[args.index(name) + 1]
+remote = Path(os.environ['FIXTURE_ROOT'])
+assert arg('--auth-mode') == 'login'
+path = Path(arg('--file'))
+if args[2] == 'upload':
+    if '--if-none-match' in args:
+        assert arg('--if-none-match') == '*'
+        version = 'one'
+    else:
+        assert arg('--if-match') == 'etag-one'
+        version = 'two'
+    (remote / version).write_bytes(path.read_bytes())
+    print(json.dumps({'version_id': version, 'etag': 'etag-' + version}))
+else:
+    assert args[2] == 'download' and arg('--version-id') == 'one'
+    path.write_bytes((remote / 'one').read_bytes())
+""")
+            az.chmod(0o700)
+            with patch.dict(os.environ, PATH=str(root) + os.pathsep + os.environ["PATH"], FIXTURE_ROOT=tmp):
+                receipt = qualify(work, "account", "container")
+            self.assertEqual(receipt["restored_version"], "one")
+            self.assertEqual(receipt["current_version"], "two")
+            self.assertEqual(receipt["sha256"], hashlib.sha256((root / "one").read_bytes()).hexdigest())
