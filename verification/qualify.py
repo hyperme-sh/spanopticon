@@ -94,6 +94,21 @@ def main():
             assert request(api + "/v1/evidence", token=owner)["verified"]
             assert not request(api + "/v1/evidence", token=other)["verified"]
             assert not request(api + "/v1/evidence", token=tokens["colleague"])["verified"]
+            # Age a separate disposable tenant's challenge and exercise the
+            # shipped CLI against the running service's actual SQLite volume.
+            stale = request(api + "/v1/challenges", body={"address": "expired@example.test"},
+                            key=str(uuid4()), token=other)
+            compose("exec", "-T", "api", "python", "-c",
+                    "import sys; from verification import store; "
+                    "db=store.connect(); db.execute('UPDATE challenge SET created=1,expires=2 WHERE id=?',"
+                    "(sys.argv[1],)); db.commit(); db.close()", stale["challenge_id"])
+            command = ("exec", "-T", "api", "python", "-m", "verification.retention", "--retention-seconds", "3600")
+            preview = json.loads(compose(*command))
+            assert (preview["challenge_rows"], preview["contact_rows"], preview["applied"]) == (1, 1, False)
+            assert json.loads(compose(*command, "--apply")) == preview | {"applied": True}
+            assert json.loads(compose(*command))["challenge_rows"] == 0
+            assert request(api + "/v1/evidence", token=owner)["verified"]
+
             pending = request(api + "/v1/challenges",
                               body={"address": "pending@example.test"}, token=other, key=str(uuid4()))
             pending_id = pending["challenge_id"]
