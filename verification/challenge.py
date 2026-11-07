@@ -3,10 +3,10 @@
 The caller owns authentication, scope, rate limits and the transaction that
 persists the returned attempt count and state before reporting success.
 """
-from dataclasses import dataclass
 import hashlib
 import hmac
 import json
+from dataclasses import dataclass
 
 
 @dataclass(frozen=True)
