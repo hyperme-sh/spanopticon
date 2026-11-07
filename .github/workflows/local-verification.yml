@@ -18,6 +18,10 @@ jobs:
       - run: python3 -m unittest discover -s tests -p test_operator_delivery.py
       - run: python3 -m verification.qualify_operator
   keycloak-helm:
+    strategy:
+      fail-fast: false
+      matrix:
+        delivery: [local, operator]
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
@@ -27,4 +31,4 @@ jobs:
       - run: |
           python3 scripts/install_deployment_test_tools.py --output "$RUNNER_TEMP/verification-tools"
           echo "$RUNNER_TEMP/verification-tools" >> "$GITHUB_PATH"
-      - run: bash verification/qualify-helm.sh
+      - run: bash verification/qualify-helm.sh "${{ matrix.delivery }}"

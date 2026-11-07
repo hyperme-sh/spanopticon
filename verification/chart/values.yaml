@@ -2,3 +2,13 @@ image: ""
 existingSecret: ""
 issuer: ""
 audience: ""
+delivery:
+  mode: local
+  adapterImage: ""
+  startupCommand: []
+  existingAdapterSecret: ""
+  recipientDomains: []
+  hourlyLimits:
+    subject: 10
+    recipient: 3
+    operator: 100
