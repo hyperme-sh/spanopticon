@@ -1,0 +1,65 @@
+x-runtime: &runtime
+  image: ${COMPOSE_PROJECT_NAME:?}-verification:local
+  build:
+    context: ..
+    dockerfile: verification/Dockerfile
+  read_only: true
+  cap_drop: [ALL]
+  security_opt: [no-new-privileges:true]
+x-db: &db
+  VERIFICATION_DB: /state/contact.db
+  VERIFICATION_KEY_FILE: /config/secret
+services:
+  migrate:
+    <<: *runtime
+    command: [python, -m, verification.store]
+    environment: *db
+    volumes: [state:/state]
+  identity:
+    <<: *runtime
+    command: [uvicorn, examples.operator.identity:create_app, --factory, --host, 0.0.0.0]
+    environment:
+      IDENTITY_PRIVATE_KEY_FILE: /config/key
+      IDENTITY_ACCOUNTS_FILE: /config/accounts
+    volumes:
+      - ${VERIFICATION_CONFIG:?}/issuer.key:/config/key:ro
+      - ${VERIFICATION_CONFIG:?}/accounts.json:/config/accounts:ro
+    ports: ['127.0.0.1::8000']
+    healthcheck: &health
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://localhost:8000/health/ready',timeout=3)"]
+      interval: 3s
+      timeout: 5s
+      retries: 25
+  api:
+    <<: *runtime
+    command: [uvicorn, verification.service:app, --host, 0.0.0.0]
+    depends_on:
+      migrate: {condition: service_completed_successfully}
+    environment:
+      <<: *db
+      IDENTITY_ISSUER: https://cedar.test/identity
+      IDENTITY_AUDIENCE: cedar-operator
+      IDENTITY_ALGORITHM: EdDSA
+      IDENTITY_PUBLIC_KEY_FILE: /config/pub
+    volumes:
+      - state:/state
+      - ${VERIFICATION_CONFIG:?}/issuer.pub:/config/pub:ro
+      - ${VERIFICATION_CONFIG:?}/secret:/config/secret:ro
+    ports: ['127.0.0.1::8000']
+    healthcheck: *health
+  worker:
+    <<: *runtime
+    command: [python, -m, verification.worker]
+    depends_on:
+      migrate: {condition: service_completed_successfully}
+    environment:
+      <<: *db
+      VERIFICATION_MAILBOX: /mailbox/inbox.db
+    network_mode: none
+    volumes:
+      - state:/state
+      - mailbox:/mailbox
+      - ${VERIFICATION_CONFIG:?}/secret:/config/secret:ro
+volumes:
+  state: {}
+  mailbox: {}
