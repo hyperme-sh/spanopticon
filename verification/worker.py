@@ -3,6 +3,7 @@ import os
 import time
 
 from . import store
+from .operator_delivery import dispatch_one
 
 
 def deliver_one():
@@ -13,7 +14,7 @@ def deliver_one():
         now = int(time.time())
         db.execute("DELETE FROM inbox.message WHERE expires<=?", (now,))
         row = db.execute("""SELECT id, contact, expires FROM challenge
-                            WHERE delivered=0 AND state='pending' AND expires>? ORDER BY created LIMIT 1""",
+                            WHERE method='local-test-delivery' AND delivered=0 AND state='pending' AND expires>? ORDER BY created LIMIT 1""",
                          (now,)).fetchone()
         if not row:
             return False
@@ -26,6 +27,7 @@ def deliver_one():
 if __name__ == "__main__":
     os.umask(0o077)
     store.ready()
+    deliver = dispatch_one if store.delivery_method() == "operator-delivery" else deliver_one
     while True:
-        if not deliver_one():
+        if not deliver():
             time.sleep(1)

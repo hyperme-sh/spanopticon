@@ -28,19 +28,19 @@ def transaction():
 def migrate():
     with transaction() as db:
         version = db.execute("PRAGMA user_version").fetchone()[0]
-        if version == 0:
-            sql = Path(__file__).with_name("migrations").joinpath("001.sql").read_text()
+        if version not in (0, 1, 2):
+            raise RuntimeError("Unknown verification schema")
+        for target in range(version + 1, 3):
+            sql = Path(__file__).with_name("migrations").joinpath(f"{target:03}.sql").read_text()
             for statement in sql.split(";"):
                 if statement.strip():
                     db.execute(statement)
-            db.execute("PRAGMA user_version = 1")
-        elif version != 1:
-            raise RuntimeError("Unknown verification schema")
+            db.execute(f"PRAGMA user_version = {target}")
 
 
 def ready():
     with closing(connect()) as db:
-        if db.execute("PRAGMA user_version").fetchone()[0] != 1:
+        if db.execute("PRAGMA user_version").fetchone()[0] != 2:
             raise RuntimeError("Verification migration required")
 
 
@@ -69,6 +69,20 @@ def principal_scope(issuer, tenant, subject):
     return hashlib.sha256(json.dumps([issuer, tenant, subject], separators=(",", ":")).encode()).hexdigest()
 
 
+def delivery_method():
+    mode = os.environ.get("VERIFICATION_DELIVERY_MODE", "local")
+    if mode not in ("local", "operator"):
+        raise ValueError("Unknown verification delivery mode")
+    return "operator-delivery" if mode == "operator" else "local-test-delivery"
+
+
+def hourly_limit(name, default):
+    value = int(os.environ.get("VERIFICATION_LIMIT_" + name, default))
+    if value < 1:
+        raise ValueError("Verification limits must be positive")
+    return value
+
+
 def create(scope, address, request_key):
     with transaction() as db:
         now = int(time.time())
@@ -77,19 +91,27 @@ def create(scope, address, request_key):
             if prior["contact"] != address:
                 raise Conflict()
             return {"challenge_id": prior["id"], "expires_at": prior["expires"]}
-        count = db.execute("SELECT count(*) FROM challenge WHERE scope=? AND created>?", (scope, now-3600)).fetchone()[0]
-        if count >= 10:
-            raise RateLimited()
+        # All three budgets are charged by the same insert under BEGIN IMMEDIATE.
+        for predicate, args, limit in (
+            ("scope=?", (scope,), hourly_limit("SUBJECT", 10)),
+            ("contact=?", (address,), hourly_limit("RECIPIENT", 3)),
+            ("1=1", (), hourly_limit("OPERATOR", 100)),
+        ):
+            count = db.execute(f"SELECT count(*) FROM challenge WHERE {predicate} AND created>?",
+                               (*args, now - 3600)).fetchone()[0]
+            if count >= limit:
+                raise RateLimited()
         current = db.execute("SELECT * FROM contact WHERE scope=?", (scope,)).fetchone()
         revision = current["revision"] + 1 if current else 1
         keep = current["verified_until"] if current and current["address"] == address else 0
-        db.execute("INSERT OR REPLACE INTO contact VALUES (?,?,?,?)", (scope, revision, address, keep))
+        db.execute("INSERT OR REPLACE INTO contact VALUES (?,?,?,?,?)",
+                   (scope, revision, address, keep, current["method"] if keep else delivery_method()))
         db.execute("UPDATE challenge SET state='superseded' WHERE scope=? AND state='pending'", (scope,))
         cid = str(uuid4())
         secret = key()
         digest = code_digest(secret, cid, scope, revision, delivery_code(secret, cid))
-        db.execute("""INSERT INTO challenge(id,scope,request_key,contact,revision,digest,created,expires)
-                      VALUES (?,?,?,?,?,?,?,?)""", (cid, scope, request_key, address, revision, digest, now, now+600))
+        db.execute("""INSERT INTO challenge(id,scope,request_key,contact,revision,digest,created,expires,method)
+                      VALUES (?,?,?,?,?,?,?,?,?)""", (cid, scope, request_key, address, revision, digest, now, now+600, delivery_method()))
         return {"challenge_id": cid, "expires_at": now+600}
 
 
@@ -106,15 +128,15 @@ def complete(scope, cid, submitted):
                             now=now, limit=5)
         db.execute("UPDATE challenge SET state=?,attempts=? WHERE id=?", (result.state, result.attempts, cid))
         if result.accepted:
-            db.execute("UPDATE contact SET verified_until=? WHERE scope=?", (now+86400, scope))
-        return result.accepted
+            db.execute("UPDATE contact SET verified_until=?, method=? WHERE scope=?", (now+86400, row["method"], scope))
+        return row["method"] if result.accepted else False
 
 
 def evidence(scope):
     with closing(connect()) as db:
-        row = db.execute("SELECT verified_until FROM contact WHERE scope=?", (scope,)).fetchone()
+        row = db.execute("SELECT verified_until, method FROM contact WHERE scope=?", (scope,)).fetchone()
         until = row[0] if row else 0
-        return {"method": "local-test-delivery", "verified": until > int(time.time()), "expires_at": until}
+        return {"method": row["method"] if row else delivery_method(), "verified": until > int(time.time()), "expires_at": until}
 
 
 if __name__ == "__main__":
