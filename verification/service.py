@@ -16,6 +16,7 @@ from . import store
 async def lifespan(app):
     store.ready()
     store.key()
+    store.delivery_method()
     app.state.key = Path(os.environ["IDENTITY_PUBLIC_KEY_FILE"]).read_bytes()
     app.state.issuer = os.environ["IDENTITY_ISSUER"]
     app.state.audience = os.environ["IDENTITY_AUDIENCE"]
@@ -41,7 +42,7 @@ def scope(credential: HTTPAuthorizationCredentials = Depends(HTTPBearer())):
 
 class Contact(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    address: str = Field(pattern=r"^[a-z0-9._+-]+@[a-z0-9.-]+\.test$", max_length=254)
+    address: str = Field(pattern=r"^[a-z0-9._+-]+@[a-z0-9-]+(\.[a-z0-9-]+)+$", max_length=254)
 
 
 class Answer(BaseModel):
@@ -57,6 +58,10 @@ def ready():
 
 @app.post("/v1/challenges")
 def create(body: Contact, idempotency_key: UUID = Header(), principal: str = Depends(scope)):
+    domain = body.address.rsplit("@", 1)[1]
+    allowed = os.environ.get("VERIFICATION_RECIPIENT_DOMAINS", "").split(",")
+    if not domain.endswith(".test") and (store.delivery_method() != "operator-delivery" or domain not in allowed):
+        raise HTTPException(422, "Recipient domain is not configured")
     try:
         return store.create(principal, body.address, str(idempotency_key))
     except store.Conflict:
@@ -67,9 +72,10 @@ def create(body: Contact, idempotency_key: UUID = Header(), principal: str = Dep
 
 @app.post("/v1/challenges/{cid}/complete")
 def complete(cid: UUID, body: Answer, principal: str = Depends(scope)):
-    if not store.complete(principal, str(cid), body.code):
+    method = store.complete(principal, str(cid), body.code)
+    if not method:
         raise HTTPException(400, "Invalid or expired challenge")
-    return {"verified": True, "method": "local-test-delivery"}
+    return {"verified": True, "method": method}
 
 
 @app.get("/v1/evidence")
