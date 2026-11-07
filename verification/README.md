@@ -93,3 +93,15 @@ Run `bash verification/qualify-helm.sh operator` with the prerequisites above. T
 Run `python3 -m verification.qualify` from the repository root. In its disposable project, the rehearsal stops the API and worker, archives both SQLite volume directories together, removes the project volumes, and restores the archive into fresh volumes before starting migration and services. It reuses the original issuer and verification key. It checks tenant-scoped evidence, rejection of an already consumed code and completion of a pending challenge using its restored mailbox entry.
 
 The archive contains contact data and short-lived codes. The rehearsal uses synthetic contacts and a temporary archive. For an operator backup, protect the archive and retain the corresponding configuration and keys separately. Restore into isolation first. The snapshot reflects the instant writers stopped. Reconcile later contact changes, deletions, consumed challenges and adapter deliveries before serving traffic from an older snapshot.
+
+### Recover an operator verifier after database rollback
+
+Keep the restored API, worker and adapter disconnected from traffic. Restore the service database to a fresh volume, retain the operator's independent delivery receipts, and run the migration job. Then run the following once against the restored database using the same Compose project and configuration as the migration.
+
+```sh
+docker compose -f verification/compose.yaml run --rm --no-deps migrate python -m verification.recover_operator
+```
+
+This offline command invalidates all pending challenges and clears verification evidence in one transaction. A queued row in an old snapshot may already have reached the provider. The worker skips invalidated rows, and a receipt alone cannot restore contact verification. The command preserves challenge IDs, stored request keys, attempt counts and the snapshot's dispatch statuses for inspection. Repeating it before restart is safe. Running it against a live database would invalidate current proofs.
+
+Before resuming issuance, reconcile later provider receipts, erasures and request history against the snapshot. Missing post-snapshot rows also affect rate limits and idempotency. If you cannot reconstruct recent issuance counts, keep issuance paused for the full one-hour budget window. Require fresh verification for restored contacts. Provider-side message retention and recovery remain the operator's responsibility.
