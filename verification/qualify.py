@@ -1,5 +1,6 @@
 """Run the authenticated HTTP journey against isolated Compose services."""
 from datetime import datetime, timezone
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -128,10 +129,32 @@ def main():
                                    check=True, timeout=60)
                 expired = archives / f"verification-20000101T000000Z-{uuid4().hex}.tar"
                 expired.write_bytes(retained.read_bytes())
+                ssh_config = os.environ.get("VERIFICATION_CI_SSH_CONFIG")
+                if ssh_config:
+                    remote = ["ssh", "-F", ssh_config, "replica", "python3", "-m"]
+                    remote_archive = remote + ["verification.backup_replica"]
+                    remote_expiry = remote + ["verification.backup_expiry", "archives", "--retention-days", "1"]
+                    digest = hashlib.sha256(retained.read_bytes()).hexdigest()
+                    for archive in (expired, retained):
+                        with archive.open("rb") as source:
+                            subprocess.run(remote_archive + ["put", "archives", archive.name, digest],
+                                           stdin=source, check=True, timeout=30)
+                    for flags, count in [([], 1), (["--apply"], 1), (["--apply"], 0)]:
+                        report = subprocess.check_output(remote_expiry + flags, timeout=30)
+                        assert json.loads(report)["eligible_archives"] == count
+                    missing = subprocess.run(remote_archive + ["get", "archives", expired.name, digest],
+                                             capture_output=True, timeout=30)
+                    assert missing.returncode and not missing.stdout
                 assert expire(archives, 1)["eligible_archives"] == 1 and expired.exists()
                 assert expire(archives, 1, apply=True)["eligible_archives"] == 1 and not expired.exists()
                 assert expire(archives, 1, apply=True)["eligible_archives"] == 0
                 compose("down", "--volumes")
+                if ssh_config:
+                    retained.unlink()
+                    with retained.open("xb") as restored:
+                        subprocess.run(remote_archive + ["get", "archives", retained.name, digest],
+                                       stdout=restored, check=True, timeout=30)
+                    assert hashlib.sha256(retained.read_bytes()).hexdigest() == digest
                 with retained.open("rb") as snapshot:
                     subprocess.run(tar + ["--no-same-owner", "-xf", "-"], env=env, stdin=snapshot,
                                    check=True, timeout=60)
