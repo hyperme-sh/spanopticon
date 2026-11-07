@@ -54,3 +54,16 @@ The worker commits its claim before calling the socket. A rejection fails closed
 Synthetic .test addresses are enabled by default. In operator mode `VERIFICATION_RECIPIENT_DOMAINS` accepts a comma-separated allowlist of lowercase exact domains for other recipients. The API enforces rolling one-hour limits per authenticated subject scope (10), per literal lowercase recipient across subjects and tenants (3), and for the entire shared service database (100). The Compose overlay accepts positive integer overrides through VERIFICATION_LIMIT_SUBJECT, VERIFICATION_LIMIT_RECIPIENT and VERIFICATION_LIMIT_OPERATOR. The existing five-attempt completion limit remains per challenge. Exact idempotent retries consume no extra budget. Alias normalization beyond lowercase input and coordination across independent service databases are operator concerns.
 
 Run `python3 -m verification.qualify_operator` on Linux with Docker Compose to exercise a separately running socket adapter, successful proof, explicit rejection, a lost acknowledgement, restart and cross-subject budget exhaustion. The fixture uses synthetic addresses and holds codes in memory.
+
+### Reconcile an uncertain delivery
+
+From the deployed Compose project, use the same configuration, project name and environment as at startup. Look up the challenge ID from the issuance response.
+
+```sh
+docker compose -f verification/compose.yaml -f verification/compose.operator.yaml \
+  exec -T worker python -m verification.inspect_delivery "$CHALLENGE_ID"
+```
+
+The lookup opens the database read-only and returns the ID, dispatch status, challenge state and Unix expiry. A missing operator delivery exits with status 1. Check the operator adapter's durable receipt under the same ID. Keep recipients and codes out of incident records.
+
+A `claimed` dispatch may still be running. Repeat the lookup after the worker finishes or recovers. If it remains claimed, or is `ambiguous`, record whether the adapter accepted, rejected or has no record of that ID. Even an adapter acceptance receipt establishes only delivery responsibility. Leave the challenge and dispatch rows intact. If the user still needs proof, have them request a fresh challenge with a new request key and complete that challenge within its expiry. Replaying the old request key returns the original challenge. Normal issuance limits apply.
