@@ -94,6 +94,29 @@ def main():
             assert request(api + "/v1/evidence", token=owner)["verified"]
             assert not request(api + "/v1/evidence", token=other)["verified"]
             assert not request(api + "/v1/evidence", token=tokens["colleague"])["verified"]
+            pending = request(api + "/v1/challenges",
+                              body={"address": "pending@example.test"}, token=other, key=str(uuid4()))
+            pending_id = pending["challenge_id"]
+            pending_code = mailbox(pending_id)
+
+            # Both SQLite stores share one recovery point. Stop every writer before copying.
+            compose("stop", "api", "worker")
+            tar = prefix + ["run", "--rm", "--no-deps", "-T", "worker", "tar", "-C", "/"]
+            with tempfile.TemporaryFile() as snapshot:
+                subprocess.run(tar + ["-cf", "-", "state", "mailbox"], env=env, stdout=snapshot,
+                               check=True, timeout=60)
+                compose("down", "--volumes")
+                snapshot.seek(0)
+                subprocess.run(tar + ["--no-same-owner", "-xf", "-"], env=env, stdin=snapshot,
+                               check=True, timeout=60)
+            compose("up", "-d", "--no-build", "--wait")
+            api = "http://" + compose("port", "api", "8000")
+            assert request(api + "/v1/evidence", token=owner)["verified"]
+            assert not request(api + "/v1/evidence", token=other)["verified"]
+            request(api + "/v1/challenges/" + cid + "/complete", body=answer, token=owner, expected=400)
+            assert mailbox(pending_id) == pending_code
+            request(api + "/v1/challenges/" + pending_id + "/complete",
+                    body={"code": pending_code}, token=other)
             request(api + "/v1/challenges", body={"address": "new@example.test"}, token=owner, key=str(uuid4()))
             assert not request(api + "/v1/evidence", token=owner)["verified"]
         finally:
