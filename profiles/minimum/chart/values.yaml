@@ -1,0 +1,7 @@
+image: ""
+tenant: ""
+existingSecret: ""
+localIssuer: false
+issuer: https://cedar.test/identity
+audience: cedar-operator
+algorithm: EdDSA

@@ -1,0 +1,89 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ .Release.Name }}-state
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests:
+      storage: 64Mi
+{{- $roles := list "api" }}
+{{- if .Values.localIssuer }}{{ $roles = append $roles "identity" }}{{ end }}
+{{- range $role := $roles }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $.Release.Name }}-{{ $role }}
+spec:
+  replicas: 1
+  strategy: {type: Recreate}
+  selector:
+    matchLabels: {app: {{ $.Release.Name }}-{{ $role }}}
+  template:
+    metadata:
+      labels: {app: {{ $.Release.Name }}-{{ $role }}}
+    spec:
+      automountServiceAccountToken: false
+      securityContext: {runAsNonRoot: true, runAsUser: 10001, runAsGroup: 10001, fsGroup: 10001}
+      containers:
+        - name: {{ $role }}
+          image: {{ required "image is required" $.Values.image | quote }}
+          imagePullPolicy: IfNotPresent
+          command:
+            - uvicorn
+            {{- if eq $role "api" }}
+            - profiles.minimum.service:app
+            {{- else }}
+            - examples.operator.identity:create_app
+            - --factory
+            {{- end }}
+            - --host
+            - 0.0.0.0
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: [ALL]}
+          readinessProbe:
+            httpGet: {path: /health/ready, port: 8000}
+          env:
+            {{- if eq $role "api" }}
+            - {name: MINIMUM_DATABASE, value: /state/tenant.db}
+            - {name: MINIMUM_TENANT, value: {{ required "tenant is required" $.Values.tenant | quote }}}
+            - {name: IDENTITY_ALGORITHM, value: {{ $.Values.algorithm | quote }}}
+            - {name: IDENTITY_AUDIENCE, value: {{ $.Values.audience | quote }}}
+            - {name: IDENTITY_ISSUER, value: {{ $.Values.issuer | quote }}}
+            - {name: IDENTITY_PUBLIC_KEY_FILE, value: /config/issuer.pub}
+            {{- else }}
+            - {name: IDENTITY_PRIVATE_KEY_FILE, value: /config/issuer.key}
+            - {name: IDENTITY_ACCOUNTS_FILE, value: /config/accounts.json}
+            {{- end }}
+          volumeMounts:
+            - {name: config, mountPath: /config, readOnly: true}
+            {{- if eq $role "api" }}
+            - {name: state, mountPath: /state}
+            {{- end }}
+      volumes:
+        - name: config
+          secret:
+            secretName: {{ required "existingSecret is required" $.Values.existingSecret | quote }}
+            items:
+              {{- if eq $role "api" }}
+              - {key: issuer.pub, path: issuer.pub}
+              {{- else }}
+              - {key: issuer.key, path: issuer.key}
+              - {key: accounts.json, path: accounts.json}
+              {{- end }}
+        {{- if eq $role "api" }}
+        - name: state
+          persistentVolumeClaim: {claimName: {{ $.Release.Name }}-state}
+        {{- end }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $.Release.Name }}-{{ $role }}
+spec:
+  selector: {app: {{ $.Release.Name }}-{{ $role }}}
+  ports: [{port: 8000, targetPort: 8000}]
+{{- end }}

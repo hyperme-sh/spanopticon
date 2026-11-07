@@ -71,3 +71,5 @@ all other contract fields must remain unchanged. New package initializers, entry
 points, native/data files, case collisions, package shadowing and new namespaces
 are rejected. Patch releases still require identical contracts. Consumer tests
 remain necessary; byte compatibility does not establish live provider behavior.
+
+The [minimum bundle](profiles/minimum/README.md) includes a tenant-scoped reference API, Python client, local test issuer, and Compose and Helm installation instructions.
