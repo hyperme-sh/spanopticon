@@ -11,7 +11,7 @@ trap cleanup EXIT
 ssh-keygen -q -N '' -t ed25519 -f "$tmp/client"
 chmod 644 "$tmp/client.pub"
 docker build -t verification-backup-ci -f verification/fixtures/backup/Dockerfile .
-container=$(docker run -d -p 127.0.0.1::22 --mount "type=bind,src=$tmp/client.pub,dst=/etc/ssh/replica.pub,readonly" verification-backup-ci)
+container=$(docker run -d -p 127.0.0.1::22 --mount "type=bind,src=$tmp/client.pub,dst=/run/replica.pub,readonly" verification-backup-ci)
 port=$(docker port "$container" 22/tcp)
 for attempt in {1..30}; do
   docker exec "$container" cat /etc/ssh/ssh_host_ed25519_key.pub > "$tmp/host.pub" 2>/dev/null && break
