@@ -99,3 +99,35 @@ The archive contains contact data and short-lived codes. The rehearsal uses synt
 An operator can preview retention on the service database with `python -m verification.retention --retention-seconds 604800` inside the API or worker container. This example keeps rows for seven days after expiry. Choose the window to cover your incident-reconciliation needs. The minimum is one hour. Review the aggregate challenge and contact counts, then repeat with `--apply` to delete eligible rows in one transaction. The command recomputes eligibility at execution time.
 
 Challenge deletion also ends lookup by the old challenge ID and idempotency key, including for ambiguous deliveries. Clients should use fresh request keys for new challenges. Active evidence, recent issuance counters and contacts referenced by retained challenges survive cleanup. Contact rows with evidence expire only after the selected window following evidence expiry. Run during a low-write period because apply takes the SQLite writer lock. This operation covers logical rows in the service database. Mailbox expiry runs in the local worker. Provider records, backups and subject-specific erasure have separate lifecycles.
+
+### Erase one verification subject and recover a backup
+
+Stop all verification API and worker replicas and finish any in-flight provider
+request. On the operator host, record the exact token issuer, tenant UUID and
+case-sensitive subject against the authoritative verification key file.
+
+```sh
+python3 -m verification.erasure record --authority "$authority" \
+  --issuer "$issuer" --tenant "$tenant" --subject "$subject"
+```
+
+This permanently retires the issuer/tenant/subject combination in this installation.
+The file now contains the original delivery key and the hashed scope. Keep it
+in a protected directory and durably store the latest copy separately from
+service and mailbox backups. For Kubernetes, replace the verification Secret's
+original raw key value with these exact file bytes. Restrict access as for the
+original key. An obsolete or lost authority makes recovery unsafe because an old
+snapshot cannot identify subsequent deletions.
+
+With writers still stopped, mount the current authority and the service volumes
+in a fresh worker container. Run `python -m verification.erasure replay` in that
+container, with the normal worker delivery mode and mailbox volume. Recreate
+the API and worker so both mount the updated file. Repeat replay before every
+restore goes online, including when restoring an older mailbox. Recovery drops
+retired contact and challenge rows and local messages without a surviving
+challenge. API and worker startup reject restored service rows pending replay.
+The local worker also reconciles orphan messages before dispatch.
+
+If switching delivery modes, reconcile every retained local mailbox in local
+mode. Isolate archived snapshots from ordinary access until expiry. Apply the
+provider's own erasure procedure to messages it has already accepted.

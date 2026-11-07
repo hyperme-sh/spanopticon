@@ -9,6 +9,7 @@ import sqlite3
 import time
 from uuid import uuid4
 
+from . import authority
 from .challenge import check_code, code_digest
 
 
@@ -43,12 +44,18 @@ def ready():
         if db.execute("PRAGMA user_version").fetchone()[0] != 2:
             raise RuntimeError("Verification migration required")
 
+        for scope in authority.read(os.environ["VERIFICATION_KEY_FILE"])[1]:
+            if db.execute("SELECT 1 FROM contact WHERE scope=? UNION ALL SELECT 1 FROM challenge WHERE scope=? LIMIT 1",
+                          (scope, scope)).fetchone():
+                raise RuntimeError("Verification erasure replay required")
+
 
 def key():
-    secret = Path(os.environ["VERIFICATION_KEY_FILE"]).read_bytes()
-    if len(secret) != 32:
-        raise ValueError("Expected a 32-byte verification secret")
-    return secret
+    return authority.read(os.environ["VERIFICATION_KEY_FILE"])[0]
+
+
+class RetiredSubject(Exception):
+    pass
 
 
 def delivery_code(secret, cid):
@@ -84,6 +91,8 @@ def hourly_limit(name, default):
 
 
 def create(scope, address, request_key):
+    if scope in authority.read(os.environ["VERIFICATION_KEY_FILE"])[1]:
+        raise RetiredSubject()
     with transaction() as db:
         now = int(time.time())
         prior = db.execute("SELECT * FROM challenge WHERE scope=? AND request_key=?", (scope, request_key)).fetchone()

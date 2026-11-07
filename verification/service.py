@@ -64,6 +64,8 @@ def create(body: Contact, idempotency_key: UUID = Header(), principal: str = Dep
         raise HTTPException(422, "Recipient domain is not configured")
     try:
         return store.create(principal, body.address, str(idempotency_key))
+    except store.RetiredSubject:
+        raise HTTPException(403, "Verification unavailable for this subject") from None
     except store.Conflict:
         raise HTTPException(409, "Request key already used for another contact") from None
     except store.RateLimited:

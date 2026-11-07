@@ -3,6 +3,7 @@ import os
 import time
 
 from . import store
+from .erasure import replay
 from .operator_delivery import dispatch_one
 
 
@@ -27,6 +28,7 @@ def deliver_one():
 if __name__ == "__main__":
     os.umask(0o077)
     store.ready()
+    replay()
     deliver = dispatch_one if store.delivery_method() == "operator-delivery" else deliver_one
     while True:
         if not deliver():
