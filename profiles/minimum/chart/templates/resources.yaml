@@ -1,3 +1,7 @@
+{{- $image := required "image is required" .Values.image -}}
+{{- if not (regexMatch "^[^@[:space:]]+@sha256:[a-f0-9]{64}$" $image) -}}
+{{- fail "image must be a digest-pinned reference ending in @sha256:<64 lowercase hex digits>" -}}
+{{- end -}}
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
@@ -28,7 +32,7 @@ spec:
       securityContext: {runAsNonRoot: true, runAsUser: 10001, runAsGroup: 10001, fsGroup: 10001}
       containers:
         - name: {{ $role }}
-          image: {{ required "image is required" $.Values.image | quote }}
+          image: {{ $image | quote }}
           imagePullPolicy: IfNotPresent
           command:
             - uvicorn
