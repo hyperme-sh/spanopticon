@@ -263,3 +263,9 @@ environment. The check exercises contact proof, rejects completion by another
 subject, ends the Keycloak session and checks refresh denial. Verification
 validates signed access tokens offline. The drill uses a 30-second client
 token lifetime and checks API rejection after expiry.
+
+### Rotate the pinned issuer signing key
+
+The verifier loads one issuer public key at startup. For a planned cutover, coordinate token issuance and the verifier restart. Activate the replacement RS256 signing key in the issuer, confirm its active key ID and public key through the operator's trusted issuer administration path, then patch only `issuer.pub` in the configured Kubernetes Secret and restart the verification deployment. Preserve the service secret and erasure authority. Clients holding tokens signed by the old key must obtain fresh tokens. During the interval between issuer activation and verifier restart, newly signed tokens receive HTTP 401.
+
+The local Helm qualification creates a higher-priority RSA provider in its disposable Keycloak realm. It exercises both sides of the trust change with real tokens and verifies rejection of the former key while its token is still unexpired. This procedure uses an explicit cutover with one trusted key at a time.
