@@ -270,8 +270,10 @@ The verifier loads one issuer public key at startup. For a planned cutover, coor
 
 The local Helm qualification creates a higher-priority RSA provider in its disposable Keycloak realm. It exercises both sides of the trust change with real tokens and verifies rejection of the former key while its token is still unexpired. This procedure uses an explicit cutover with one trusted key at a time.
 
-### Keycloak federation on TEST
+### Keycloak federation in a disposable installation
 
-Run `python -m verification.federation_check --origin https://auth.test.hyperme.sh --admin-origin http://127.0.0.1:8081` on the TEST host with a short-lived realm administration token on standard input. The drill creates two disposable realms and a synthetic upstream user. It checks two independent PKCE sessions, the broker's stored identity link, upstream rejection of the broker token, and deletion of both realms. It exercises the OIDC broker using HTTP login forms and does not require an employee account.
+On a disposable Keycloak installation, set `ISSUER_ORIGIN` to its browser-facing origin and `ADMIN_ORIGIN` to its trusted administration origin. Run `python -m verification.federation_check --origin "$ISSUER_ORIGIN" --admin-origin "$ADMIN_ORIGIN"` with a short-lived realm administration token on standard input. The drill creates two disposable realms and a synthetic upstream user. It checks two independent PKCE sessions, the broker's stored identity link, upstream rejection of the broker token, and deletion of both realms. It exercises the OIDC broker using HTTP login forms and does not require an employee account.
 
 Add `--verifier` in an environment with the verifier's locked dependencies and run from the repository root. The drill starts the verification API on a temporary loopback port with an empty database. It reads evidence with two independent federated sessions and checks that another broker client with a different audience receives HTTP 401.
+
+For shared Hyperme.sh TEST, follow the infrastructure fixture map and check the installed readiness receipt before signing in with the configured identity. Reserve the realm-creation drill above for disposable installations. Employee federation requires an authorized Microsoft sign-in through the deployed broker.
