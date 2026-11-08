@@ -26,11 +26,11 @@ def require(response, status):
     return response
 
 
-def login(origin, broker, upstream, callback, username, password):
+def login(origin, broker, upstream, callback, username, password, client="test-browser"):
     verifier = secrets.token_urlsafe(48)
     challenge = base64.urlsafe_b64encode(hashlib.sha256(verifier.encode()).digest()).decode().rstrip("=")
     state = secrets.token_urlsafe(24)
-    params = dict(client_id="test-browser", response_type="code", scope="openid", state=state,
+    params = dict(client_id=client, response_type="code", scope="openid", state=state,
                   redirect_uri=callback, kc_idp_hint="test-upstream", code_challenge_method="S256",
                   code_challenge=challenge)
     oidc = f"{origin}/realms/{broker}/protocol/openid-connect"
@@ -59,17 +59,17 @@ def login(origin, broker, upstream, callback, username, password):
         else:
             raise RuntimeError("Federated login exceeded redirect limit")
         token = require(browser.post(oidc + "/token", data=dict(grant_type="authorization_code",
-                        client_id="test-browser", code=query["code"][0], code_verifier=verifier,
+                        client_id=client, code=query["code"][0], code_verifier=verifier,
                         redirect_uri=callback), timeout=15), 200).json()["access_token"]
         headers = {"Authorization": "Bearer " + token}
         me = require(browser.get(oidc + "/userinfo", headers=headers, timeout=15), 200).json()
         assert me["preferred_username"] == username
         require(browser.get(f"{origin}/realms/{upstream}/protocol/openid-connect/userinfo",
                             headers=headers, timeout=15), 401)
-        return me["sub"]
+        return me["sub"], token
 
 
-def run(origin, admin_origin, admin_token):
+def run(origin, admin_origin, admin_token, verifier=False):
     suffix = uuid4().hex[:12]
     upstream, broker = "test-upstream-" + suffix, "test-broker-" + suffix
     username = "synthetic-" + suffix
@@ -94,16 +94,31 @@ def run(origin, admin_origin, admin_token):
                    users=[dict(username=username, enabled=True, firstName="Synthetic", lastName="Fixture",
                    email=username+"@example.test", emailVerified=True,
                    credentials=[dict(type="password", value=password, temporary=False)])])
-            create(broker, clients=[dict(clientId="test-browser", protocol="openid-connect", publicClient=True,
-                   redirectUris=[callback], standardFlowEnabled=True, directAccessGrantsEnabled=False,
-                   attributes={"pkce.code.challenge.method": "S256"})],
+            tenant = str(uuid4())
+            clients = []
+            for name, audience in [("test-browser", "verification-api"), ("other-browser", "other-api")]:
+                clients.append(dict(clientId=name, protocol="openid-connect", publicClient=True,
+                    redirectUris=[callback], standardFlowEnabled=True, directAccessGrantsEnabled=False,
+                    attributes={"pkce.code.challenge.method": "S256"},
+                    protocolMappers=[
+                        dict(name="tenant", protocol="openid-connect", protocolMapper="oidc-hardcoded-claim-mapper",
+                             config={"claim.name": "tenant_id", "claim.value": tenant, "jsonType.label": "String",
+                                     "access.token.claim": "true"}),
+                        dict(name="audience", protocol="openid-connect", protocolMapper="oidc-audience-mapper",
+                             config={"included.custom.audience": audience, "access.token.claim": "true"})]))
+            create(broker, clients=clients,
                    identityProviders=[dict(alias="test-upstream", providerId="oidc", enabled=True,
                    config=dict(clientId="broker", clientSecret=secret, issuer=f"{origin}/realms/{upstream}",
                    authorizationUrl=upstream_oidc+"/auth", tokenUrl=upstream_oidc+"/token",
                    userInfoUrl=upstream_oidc+"/userinfo", validateSignature="true", useJwksUrl="true",
                    jwksUrl=upstream_oidc+"/certs", defaultScope="openid profile email"))])
-            first = login(origin, broker, upstream, callback, username, password)
-            assert login(origin, broker, upstream, callback, username, password) == first
+            first, token = login(origin, broker, upstream, callback, username, password)
+            second, second_token = login(origin, broker, upstream, callback, username, password)
+            assert second == first
+            if verifier:
+                from verification.federation_verifier import check
+                _, wrong_token = login(origin, broker, upstream, callback, username, password, "other-browser")
+                check(f"{origin}/realms/{broker}", token, second_token, wrong_token)
             links = require(admin.get(f"{realms}/{broker}/users/{first}/federated-identity", timeout=15), 200).json()
             users = require(admin.get(f"{realms}/{upstream}/users", params={"username":username,"exact":"true"},
                                       timeout=15), 200).json()
@@ -117,5 +132,6 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--origin", required=True)
     parser.add_argument("--admin-origin", required=True)
+    parser.add_argument("--verifier", action="store_true", help="Exercise the local verification API with broker tokens")
     args = parser.parse_args()
-    run(args.origin.rstrip("/"), args.admin_origin.rstrip("/"), sys.stdin.readline().strip())
+    run(args.origin.rstrip("/"), args.admin_origin.rstrip("/"), sys.stdin.readline().strip(), args.verifier)
