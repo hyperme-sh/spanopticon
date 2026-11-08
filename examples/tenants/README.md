@@ -1,0 +1,5 @@
+Render the example into a new directory with `python3 -m deployment.tenants examples/tenants/catalog.json /tmp/tenant-deployment`. The sample UUIDs and hosts are offline fixtures. Allocate IDs once in deployment configuration and reuse the same ID when joining a tenant. Configure peers with HTTPS URLs and base64-encoded 32-byte public keys.
+
+Each portal uses its own configured login realm. Import its realm JSON into a fresh Keycloak deployment with the selected theme installed and referenced broker secret environment variables supplied. Keycloak resolves environment references during realm import. Set the matching portal environment from portal.json and supply the portal session secret separately. Leave login absent for a plane-only tenant. Leave a provider unconfigured to omit it from login. The route map is server-side. A configured peer does not grant a portal login or membership.
+
+The plane.json files declare intended peers. Plane runtime adoption, key ownership proof and settlement policy remain separate qualification steps.

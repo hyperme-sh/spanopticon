@@ -1,0 +1,30 @@
+{
+  "tenants": [
+    {
+      "id": "77988404-4488-4a8f-a636-3dbdaee411f2",
+      "name": "Cedar",
+      "plane_overlay": "cedar",
+      "peers": [],
+      "login": {
+        "portal_origin": "https://cedar.example.test",
+        "keycloak_origin": "https://auth.example.test",
+        "realm": "cedar",
+        "client_id": "cedar-portal",
+        "show_tenant_picker": true,
+        "providers": {}
+      }
+    },
+    {
+      "id": "db08e180-e7f6-448f-a600-61587c62018a",
+      "name": "Birch",
+      "plane_overlay": "birch",
+      "peers": [],
+      "login": {
+        "portal_origin": "https://birch.example.test",
+        "keycloak_origin": "https://auth.example.test",
+        "realm": "birch",
+        "client_id": "birch-portal"
+      }
+    }
+  ]
+}
