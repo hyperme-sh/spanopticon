@@ -1,5 +1,6 @@
 """Exercise the minimum external issuer contract with a disposable Keycloak realm."""
 import argparse
+import base64
 import json
 import secrets
 import textwrap
@@ -50,12 +51,16 @@ def trust(directory, issuer):
 
 
 def check(directory, issuer, api):
+    principals = {}
     tenant = (directory / "tenant").read_text()
     for name, secret in json.loads((directory / "credentials.json").read_text()).items():
         data = urlencode({"grant_type": "client_credentials", "client_id": "minimum-" + name,
                           "client_secret": secret}).encode()
         with urlopen(issuer + "/protocol/openid-connect/token", data=data, timeout=10) as response:
             token = json.load(response)["access_token"]
+        payload = token.split(".")[1]
+        claims = json.loads(base64.urlsafe_b64decode(payload + "=" * (-len(payload) % 4)))
+        principals[name] = {field: claims[field] for field in ("iss", "sub", "tenant_id")}
         expected = {"owner": 200, "other": 403, "wrong-audience": 401}[name]
         try:
             result = get_tenant(api, tenant, token)
@@ -65,6 +70,8 @@ def check(directory, issuer, api):
         else:
             if expected != 200 or result != {"tenant_id": tenant}:
                 raise RuntimeError("Unexpected tenant access")
+
+    return principals
 
 
 if __name__ == "__main__":
@@ -80,4 +87,4 @@ if __name__ == "__main__":
     elif args.action == "trust":
         trust(args.directory, args.issuer)
     else:
-        check(args.directory, args.issuer, args.api)
+        print(json.dumps(check(args.directory, args.issuer, args.api), sort_keys=True))
