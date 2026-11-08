@@ -62,8 +62,9 @@ def check_rejected(directory, issuer):
         try:
             client_token(issuer, name, secret)
         except HTTPError as error:
-            if error.code != 401 or json.load(error).get("error") != "invalid_client":
-                raise
+            body = json.load(error)
+            if error.code != 401 or body.get("error") not in {"invalid_client", "unauthorized_client"}:
+                raise RuntimeError(f"Unexpected denial: HTTP {error.code}, {body.get('error')}") from error
         else:
             raise RuntimeError("Startup import activated a replacement client credential")
 
