@@ -1,12 +1,13 @@
 """Qualify human PKCE login and logout in the disposable local Helm realm."""
 import base64
 import hashlib
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
 import secrets
 import sys
 import time
 from pathlib import Path
-import re
+from threading import Thread
 from urllib.error import HTTPError
 from urllib.parse import parse_qs, urlencode, urlsplit
 from urllib.request import urlopen
@@ -43,6 +44,16 @@ def post(url, fields):
     return urlopen(url, data=urlencode(fields).encode(), timeout=10)
 
 
+class Callback(BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200 if urlsplit(self.path).path == "/callback" else 404)
+        self.end_headers()
+
+    def log_message(self, *args):
+        # The query contains a one-time authorization code.
+        pass
+
+
 def check(cfg, issuer, api):
     from playwright.sync_api import sync_playwright
 
@@ -53,20 +64,15 @@ def check(cfg, issuer, api):
     fields = {"client_id": CLIENT, "redirect_uri": CALLBACK, "response_type": "code", "scope": "openid",
               "code_challenge_method": "S256", "code_challenge": challenge, "state": state}
     peers = service_tokens(cfg, issuer)
-    with sync_playwright() as pw:
+    with ThreadingHTTPServer(("127.0.0.1", 8765), Callback) as server, sync_playwright() as pw:
+        Thread(target=server.serve_forever, daemon=True).start()
         browser = pw.chromium.launch(channel="chrome")
         page = browser.new_page()
-        callback_url = re.compile("^" + re.escape(CALLBACK) + r"\?")
-        page.route(callback_url, lambda route: route.fulfill(status=200, body="Callback received"))
         page.goto(oidc + "/auth?" + urlencode(fields))
         page.locator("#username").fill("human-drill")
         page.locator("#password").fill((cfg / "human-password").read_text())
         page.locator("#kc-login").click()
-        if urlsplit(page.url).path != "/callback":
-            print("Post-login page:", urlsplit(page.url).path, page.title(), flush=True)
-            alerts = page.locator('[role="alert"], #input-error, #kc-page-title').all_text_contents()
-            print("Login status:", [value.strip()[:120] for value in alerts], flush=True)
-        page.wait_for_url(callback_url)
+        page.wait_for_url(lambda url: url.startswith(CALLBACK + "?"))
         callback = parse_qs(urlsplit(page.url).query)
         assert callback["state"] == [state]
         with post(oidc + "/token", {"grant_type": "authorization_code", "code": callback["code"][0],
@@ -93,10 +99,11 @@ def check(cfg, issuer, api):
             assert exc.code == 400 and json.load(exc)["error"] == "invalid_grant"
         silent = fields | {"prompt": "none", "state": secrets.token_urlsafe(24)}
         page.goto(oidc + "/auth?" + urlencode(silent))
-        page.wait_for_url(callback_url)
+        page.wait_for_url(lambda url: url.startswith(CALLBACK + "?"))
         result = parse_qs(urlsplit(page.url).query)
         assert result["state"] == [silent["state"]] and result["error"] == ["login_required"]
         browser.close()
+        server.shutdown()
     time.sleep(max(0, expiry - time.monotonic()) + 1)
     request(api + "/v1/evidence", token=token, expected=401)
 
