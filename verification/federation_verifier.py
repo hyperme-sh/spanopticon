@@ -39,7 +39,7 @@ def check(issuer, first, second, wrong_audience):
                 try:
                     if requests.get(api + "/health/ready", timeout=0.5).ok:
                         break
-                except requests.ConnectionError:
+                except (requests.ConnectionError, requests.Timeout):
                     pass
                 time.sleep(0.25)
             else:
