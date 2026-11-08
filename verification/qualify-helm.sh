@@ -17,6 +17,9 @@ cleanup() {
 trap cleanup EXIT
 cfg="$root/config"
 python3 profiles/minimum/keycloak_check.py prepare "$cfg" --audience verification-api
+if [[ ${1:-local} == local ]]; then
+  python3 -m verification.human_helm_check prepare "$cfg"
+fi
 issuer_id=$(docker run -d -p 127.0.0.1::8080 --mount "type=bind,src=$cfg/realm.json,dst=/opt/keycloak/data/import/check.json,readonly" \
   quay.io/keycloak/keycloak:26.5@sha256:8d44614c74798322c4e07fbe0ecb15cfbb5879d69b484628555f58ade06f0d8c start-dev --import-realm)
 issuer="http://$(docker port "$issuer_id" 8080/tcp)/realms/minimum"
@@ -75,4 +78,5 @@ else
   python3 -m verification.helm_recovery "$cfg" "$issuer"
   start_forward
   python3 -m verification.helm_recovery "$cfg" "$issuer" "http://$endpoint"
+  python3 -m verification.human_helm_check check "$cfg" "$issuer" "http://$endpoint"
 fi

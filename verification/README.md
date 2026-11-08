@@ -255,3 +255,11 @@ bash verification/azure/fetch-version.sh "$account" "$container" "$blob" \
 The command exposes the destination only after the bytes match the trusted
 digest. Restore into isolation and replay the current erasure authority before
 starting verification workers or serving requests.
+
+The local Helm qualification also signs in a synthetic human through Keycloak
+in headless Chrome using authorization code flow and S256 PKCE. To run the
+local Helm check, install Chrome and Python Playwright 1.56.0 in the test
+environment. The check exercises contact proof, rejects completion by another
+subject, ends the Keycloak session and checks refresh denial. Verification
+validates signed access tokens offline. The drill uses a 30-second client
+token lifetime and checks API rejection after expiry.
