@@ -10,6 +10,7 @@ cleanup() {
   status=$?
   if [[ -n $forward ]]; then kill "$forward" || true; fi
   if [[ -n $issuer_id ]]; then docker rm -f "$issuer_id" >/dev/null || status=1; fi
+  if [[ -n ${realm_volume:-} ]]; then docker volume rm "$realm_volume" >/dev/null || status=1; fi
   kind delete cluster --name "$cluster" || status=1
   rm -rf -- "$root"
   exit "$status"
@@ -20,11 +21,17 @@ python3 profiles/minimum/keycloak_check.py prepare "$cfg" --audience verificatio
 if [[ ${1:-local} == local ]]; then
   python3 -m verification.human_helm_check prepare "$cfg"
 fi
-issuer_id=$(docker run -d -p 127.0.0.1::8080 --mount "type=bind,src=$cfg/realm.json,dst=/opt/keycloak/data/import/check.json,readonly" \
-  quay.io/keycloak/keycloak:26.5@sha256:8d44614c74798322c4e07fbe0ecb15cfbb5879d69b484628555f58ade06f0d8c start-dev --import-realm)
-issuer="http://$(docker port "$issuer_id" 8080/tcp)/realms/minimum"
-curl -fsS --retry 45 --retry-all-errors --retry-delay 2 "$issuer/.well-known/openid-configuration" -o "$root/discovery.json"
-jq -e --arg issuer "$issuer" '.issuer==$issuer' "$root/discovery.json" >/dev/null
+realm_volume=$(docker volume create)
+start_issuer() {
+  issuer_id=$(docker run -d -p "$1:8080" --mount "type=volume,src=$realm_volume,dst=/opt/keycloak/data" \
+    --mount "type=bind,src=$cfg/realm.json,dst=/opt/keycloak/data/import/check.json,readonly" \
+    quay.io/keycloak/keycloak:26.5@sha256:8d44614c74798322c4e07fbe0ecb15cfbb5879d69b484628555f58ade06f0d8c start-dev --import-realm)
+  issuer_endpoint=$(docker port "$issuer_id" 8080/tcp)
+  issuer="http://$issuer_endpoint/realms/minimum"
+  curl -fsS --retry 45 --retry-all-errors --retry-delay 2 "$issuer/.well-known/openid-configuration" -o "$root/discovery.json"
+  jq -e --arg issuer "$issuer" '.issuer==$issuer' "$root/discovery.json" >/dev/null
+}
+start_issuer "127.0.0.1:"
 python3 profiles/minimum/keycloak_check.py trust "$cfg" --issuer "$issuer"
 openssl rand 32 > "$cfg/secret"
 image="local-contact:$(git rev-parse HEAD)"
@@ -79,4 +86,9 @@ else
   start_forward
   python3 -m verification.helm_recovery "$cfg" "$issuer" "http://$endpoint"
   python3 -m verification.human_helm_check check "$cfg" "$issuer" "http://$endpoint"
+  docker stop "$issuer_id" >/dev/null
+  docker rm "$issuer_id" >/dev/null
+  issuer_id=
+  start_issuer "$issuer_endpoint"
+  python3 -m verification.human_helm_check retry "$cfg" "$issuer" "http://$endpoint"
 fi

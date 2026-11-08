@@ -54,7 +54,7 @@ class Callback(BaseHTTPRequestHandler):
         pass
 
 
-def check(cfg, issuer, api):
+def check(cfg, issuer, api, retry=False):
     from playwright.sync_api import sync_playwright
 
     oidc = issuer + "/protocol/openid-connect"
@@ -81,6 +81,15 @@ def check(cfg, issuer, api):
         token = tokens["access_token"]
         expiry = time.monotonic() + tokens["expires_in"]
         assert 0 < tokens["expires_in"] <= 30
+        evidence_url = api + "/v1/evidence"
+        receipt = cfg / "human-evidence.json"
+        if retry:
+            evidence = request(evidence_url, token=token)
+            assert evidence["verified"] and evidence == json.loads(receipt.read_text())
+            browser.close()
+            server.shutdown()
+            return
+        assert not request(evidence_url, token=token)["verified"]
         challenges = api + "/v1/challenges"
         cid = request(challenges, token=token, body={"address": "human@example.test"},
                       key=str(uuid4()))["challenge_id"]
@@ -88,7 +97,9 @@ def check(cfg, issuer, api):
         for peer in ("owner", "other"):
             request(f"{challenges}/{cid}/complete", token=peers[peer], body=answer, expected=400)
         request(f"{challenges}/{cid}/complete", token=token, body=answer)
-        assert request(api + "/v1/evidence", token=token)["verified"]
+        evidence = request(evidence_url, token=token)
+        assert evidence["verified"]
+        receipt.write_text(json.dumps(evidence))
         with post(oidc + "/logout", {"client_id": CLIENT, "refresh_token": tokens["refresh_token"]}) as res:
             assert res.status == 204
         try:
@@ -112,4 +123,4 @@ if __name__ == "__main__":
     if sys.argv[1] == "prepare":
         prepare(Path(sys.argv[2]))
     else:
-        check(Path(sys.argv[2]), sys.argv[3], sys.argv[4])
+        check(Path(sys.argv[2]), sys.argv[3], sys.argv[4], retry=sys.argv[1] == "retry")
