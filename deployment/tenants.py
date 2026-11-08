@@ -34,7 +34,8 @@ def compatibility_line(plane):
     protocol = plane["protocol_version"]
     if type(protocol) is not int or protocol < 1:
         raise ValueError("Invalid peer protocol version")
-    return repo, (major, minor) if major == 0 else (major,), protocol
+    environment = identifier(plane["environment"])
+    return environment, repo, (major, minor) if major == 0 else (major,), protocol
 
 
 def render(catalog):
@@ -62,6 +63,8 @@ def render(catalog):
                 raise ValueError("Expected a unique 32-byte peer public key")
             keys.add(key)
         outputs[uid] = {"plane.json": {"tenant_id": uid, "overlay": overlay, "peers": peers}}
+        if "network" in tenant:
+            outputs[uid]["plane.json"]["network"] = tenant["network"]
         if plane is not None:
             outputs[uid]["plane.json"]["plane"] = plane
         login = tenant.get("login")

@@ -33,3 +33,17 @@ class TenantCatalogTest(unittest.TestCase):
         self.catalog["tenants"][0]["peers"] = [{"url": "https://peer.example.test", "public_key": "invalid"}]
         with self.assertRaises(ValueError):
             render(self.catalog)
+
+    def test_peer_contract(self):
+        tenant = self.catalog["tenants"][0]
+        tenant["plane"] = dict(environment="test", repository="example/plane", version="0.2.0", protocol_version=1)
+        peer = dict(url="https://peer.example.test", public_key="AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+                    plane=dict(tenant["plane"], version="0.2.9"))
+        tenant["peers"] = [peer]
+        self.assertEqual(render(self.catalog)[tenant["id"]]["plane.json"]["peers"], [peer])
+        for field, value in [("environment", "production"), ("version", "0.3.0"), ("version", "1.2.0"),
+                             ("repository", "other/plane"), ("protocol_version", 2)]:
+            with self.subTest(field=field, value=value):
+                peer["plane"] = dict(tenant["plane"], **{field:value})
+                with self.assertRaisesRegex(ValueError, "Incompatible"):
+                    render(self.catalog)
