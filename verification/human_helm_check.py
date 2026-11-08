@@ -6,6 +6,7 @@ import secrets
 import sys
 import time
 from pathlib import Path
+import re
 from urllib.error import HTTPError
 from urllib.parse import parse_qs, urlencode, urlsplit
 from urllib.request import urlopen
@@ -55,12 +56,17 @@ def check(cfg, issuer, api):
     with sync_playwright() as pw:
         browser = pw.chromium.launch(channel="chrome")
         page = browser.new_page()
-        page.route(CALLBACK + "?*", lambda route: route.fulfill(status=200, body="Callback received"))
+        callback_url = re.compile("^" + re.escape(CALLBACK) + r"\?")
+        page.route(callback_url, lambda route: route.fulfill(status=200, body="Callback received"))
         page.goto(oidc + "/auth?" + urlencode(fields))
         page.locator("#username").fill("human-drill")
         page.locator("#password").fill((cfg / "human-password").read_text())
         page.locator("#kc-login").click()
-        page.wait_for_url(CALLBACK + "?*")
+        if urlsplit(page.url).path != "/callback":
+            print("Post-login page:", urlsplit(page.url).path, page.title(), flush=True)
+            alerts = page.locator('[role="alert"], #input-error, #kc-page-title').all_text_contents()
+            print("Login status:", [value.strip()[:120] for value in alerts], flush=True)
+        page.wait_for_url(callback_url)
         callback = parse_qs(urlsplit(page.url).query)
         assert callback["state"] == [state]
         with post(oidc + "/token", {"grant_type": "authorization_code", "code": callback["code"][0],
@@ -87,7 +93,7 @@ def check(cfg, issuer, api):
             assert exc.code == 400 and json.load(exc)["error"] == "invalid_grant"
         silent = fields | {"prompt": "none", "state": secrets.token_urlsafe(24)}
         page.goto(oidc + "/auth?" + urlencode(silent))
-        page.wait_for_url(CALLBACK + "?*")
+        page.wait_for_url(callback_url)
         result = parse_qs(urlsplit(page.url).query)
         assert result["state"] == [silent["state"]] and result["error"] == ["login_required"]
         browser.close()
