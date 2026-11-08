@@ -47,3 +47,16 @@ class TenantCatalogTest(unittest.TestCase):
                 peer["plane"] = dict(tenant["plane"], **{field:value})
                 with self.assertRaisesRegex(ValueError, "Incompatible"):
                     render(self.catalog)
+
+    def test_equivalent_login_authorities_collide(self):
+        cedar, birch = self.catalog["tenants"]
+        login = birch["login"]
+        for field in ("portal_origin", "keycloak_origin"):
+            with self.subTest(field=field):
+                original = dict(login)
+                login[field] = cedar["login"][field].upper() + ":443"
+                if field == "keycloak_origin":
+                    login["realm"] = cedar["login"]["realm"]
+                with self.assertRaisesRegex(ValueError, "Duplicate"):
+                    render(self.catalog)
+                login.update(original)

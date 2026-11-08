@@ -19,6 +19,12 @@ def https(value, origin=False):
     if (url.scheme != "https" or not url.hostname or url.username is not None or url.password is not None
             or url.fragment or url.query or (origin and url.path) or any(c.isspace() for c in value)):
         raise ValueError("Expected an HTTPS origin or endpoint")
+    if origin:
+        host = url.hostname.lower()
+        if ":" in host:
+            host = f"[{host}]"
+        port = url.port
+        return "https://" + host + (f":{port}" if port is not None and port != 443 else "")
     return value
 
 
