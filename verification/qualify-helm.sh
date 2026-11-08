@@ -22,8 +22,14 @@ if [[ ${1:-local} == local ]]; then
   python3 -m verification.human_helm_check prepare "$cfg"
 fi
 realm_volume=$(docker volume create)
+admin_env=()
+if [[ ${1:-local} == local ]]; then
+  KC_BOOTSTRAP_ADMIN_PASSWORD=$(openssl rand -hex 32)
+  export KC_BOOTSTRAP_ADMIN_PASSWORD
+  admin_env=(-e KC_BOOTSTRAP_ADMIN_USERNAME=rollover-admin -e KC_BOOTSTRAP_ADMIN_PASSWORD)
+fi
 start_issuer() {
-  issuer_id=$(docker run -d -p "$1:8080" --mount "type=volume,src=$realm_volume,dst=/opt/keycloak/data" \
+  issuer_id=$(docker run -d "${admin_env[@]}" -p "$1:8080" --mount "type=volume,src=$realm_volume,dst=/opt/keycloak/data" \
     --mount "type=bind,src=$cfg/realm.json,dst=/opt/keycloak/data/import/check.json,readonly" \
     quay.io/keycloak/keycloak:26.5@sha256:8d44614c74798322c4e07fbe0ecb15cfbb5879d69b484628555f58ade06f0d8c start-dev --import-realm)
   issuer_endpoint=$(docker port "$issuer_id" 8080/tcp)
@@ -91,4 +97,16 @@ else
   issuer_id=
   start_issuer "$issuer_endpoint"
   python3 -m verification.human_helm_check retry "$cfg" "$issuer" "http://$endpoint"
+  python3 -m verification.rollover_check rotate "$cfg" "$issuer" "http://$endpoint"
+  python3 profiles/minimum/keycloak_check.py trust "$cfg" --issuer "$issuer"
+  # Patch only the issuer key. The erasure authority in this Secret has its own lifecycle.
+  jq -n --rawfile key "$cfg/issuer.pub" '{stringData:{"issuer.pub":$key}}' |
+    kubectl patch secret verification-config --type=merge --patch-file=/dev/stdin
+  kill "$forward"
+  wait "$forward" || true
+  forward=
+  kubectl rollout restart deployment/contact
+  kubectl rollout status deployment/contact --timeout=120s
+  start_forward
+  python3 -m verification.rollover_check verify "$cfg" "$issuer" "http://$endpoint"
 fi
