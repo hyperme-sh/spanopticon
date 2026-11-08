@@ -22,6 +22,21 @@ def https(value, origin=False):
     return value
 
 
+def compatibility_line(plane):
+    """A declaration check. The transport must authenticate the remote advertisement."""
+    repo = plane["repository"]
+    if not re.fullmatch(r"[a-z0-9][a-z0-9.-]*/[a-z0-9][a-z0-9.-]*", repo):
+        raise ValueError("Invalid plane repository")
+    version = plane["version"]
+    if not re.fullmatch(r"(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)", version):
+        raise ValueError("Expected a stable plane version")
+    major, minor, _ = map(int, version.split("."))
+    protocol = plane["protocol_version"]
+    if type(protocol) is not int or protocol < 1:
+        raise ValueError("Invalid peer protocol version")
+    return repo, (major, minor) if major == 0 else (major,), protocol
+
+
 def render(catalog):
     outputs, routes = {}, {}
     origins, realms = set(), set()
@@ -32,16 +47,23 @@ def render(catalog):
             raise ValueError("Invalid tenant identity or display name")
         overlay = identifier(tenant["plane_overlay"])
         peers = tenant["peers"]
+        plane = tenant.get("plane")
+        if plane is not None:
+            compatibility_line(plane)
         keys = set()
         for peer in peers:
-            if set(peer) != {"url", "public_key"}:
-                raise ValueError("Peer requires only its URL and public key")
+            if set(peer) != {"url", "public_key", "plane"}:
+                raise ValueError("Peer requires URL, public key and plane compatibility declaration")
+            if plane is None or compatibility_line(peer["plane"]) != compatibility_line(plane):
+                raise ValueError("Incompatible peer plane")
             https(peer["url"])
             key = base64.b64decode(peer["public_key"], validate=True)
             if len(key) != 32 or key in keys:
                 raise ValueError("Expected a unique 32-byte peer public key")
             keys.add(key)
         outputs[uid] = {"plane.json": {"tenant_id": uid, "overlay": overlay, "peers": peers}}
+        if plane is not None:
+            outputs[uid]["plane.json"]["plane"] = plane
         login = tenant.get("login")
         if login is None:
             continue
@@ -60,19 +82,30 @@ def render(catalog):
         for alias, registration in login.get("providers", {}).items():
             if alias not in {"google", "github", "microsoft"}:
                 raise ValueError("Unsupported broker")
-            if not registration.get("client_id") or not registration.get("secret_env"):
+            client_id = registration.get("client_id")
+            if "client_id_env" in registration:
+                if client_id or not re.fullmatch(r"[A-Z][A-Z0-9_]+", registration["client_id_env"]):
+                    raise ValueError("Invalid client ID reference")
+                client_id = "${" + registration["client_id_env"] + "}"
+            if not client_id or not registration.get("secret_env"):
                 continue
             ref = registration["secret_env"]
             if not re.fullmatch(r"[A-Z][A-Z0-9_]+", ref):
                 raise ValueError("Invalid broker secret environment reference")
-            config = {"clientId": registration["client_id"], "clientSecret": "${" + ref + "}"}
+            config = {"clientId": client_id, "clientSecret": "${" + ref + "}"}
             provider = alias
             if alias == "microsoft":
-                directory = str(UUID(registration["directory_id"]))
+                directory = registration["directory_id"]
+                if directory == "common":
+                    work = [str(UUID(t)) for t in registration["allowed_work_directories"]]
+                    directories = sorted(set(work + ["9188040d-6c67-4c5b-b112-36a304b66dad"]))
+                else:
+                    directory = str(UUID(directory))
+                    directories = [directory]
                 base = "https://login.microsoftonline.com/" + directory
                 provider = "oidc"
                 config.update(authorizationUrl=base+"/oauth2/v2.0/authorize", tokenUrl=base+"/oauth2/v2.0/token",
-                              issuer=base+"/v2.0", jwksUrl=base+"/discovery/v2.0/keys",
+                              issuer=",".join(f"https://login.microsoftonline.com/{t}/v2.0" for t in directories), jwksUrl=base+"/discovery/v2.0/keys",
                               userInfoUrl="https://graph.microsoft.com/oidc/userinfo", validateSignature="true",
                               useJwksUrl="true", defaultScope="openid profile email", prompt="select_account")
             brokers.append(dict(alias=alias, providerId=provider, enabled=True, storeToken=False, config=config))
