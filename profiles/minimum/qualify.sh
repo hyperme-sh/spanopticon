@@ -17,6 +17,7 @@ cleanup() {
     helm) kind delete cluster --name "$project" || result=1 ;;
   esac
   if [[ -n ${keycloak_id:-} ]]; then docker rm -f "$keycloak_id" >/dev/null || result=1; fi
+  if [[ -n ${realm_volume:-} ]]; then docker volume rm "$realm_volume" >/dev/null || result=1; fi
   rm -rf -- "$root"
   exit "$result"
 }
@@ -35,12 +36,17 @@ case $identity_mode in
     ;;
   keycloak)
     python3 "$profile/keycloak_check.py" prepare "$root/config"
-    keycloak_id=$(docker run -d -p 127.0.0.1::8080 --mount "type=bind,src=$root/config/realm.json,dst=/opt/keycloak/data/import/minimum.json,readonly" \
-      quay.io/keycloak/keycloak:26.5@sha256:8d44614c74798322c4e07fbe0ecb15cfbb5879d69b484628555f58ade06f0d8c start-dev --import-realm)
-    issuer_endpoint=$(docker port "$keycloak_id" 8080/tcp)
-    export IDENTITY_ISSUER="http://$issuer_endpoint/realms/minimum" IDENTITY_AUDIENCE=minimum-api IDENTITY_ALGORITHM=RS256
-    curl -fsS --retry 36 --retry-all-errors --retry-delay 2 "$IDENTITY_ISSUER/.well-known/openid-configuration" -o "$root/discovery.json"
-    jq -e --arg expected "$IDENTITY_ISSUER" '.issuer == $expected' "$root/discovery.json" >/dev/null
+    realm_volume=$(docker volume create)
+    start_keycloak() {
+      keycloak_id=$(docker run -d -p "$1:8080" --mount "type=volume,src=$realm_volume,dst=/opt/keycloak/data" \
+        --mount "type=bind,src=$root/config/realm.json,dst=/opt/keycloak/data/import/minimum.json,readonly" \
+        quay.io/keycloak/keycloak:26.5@sha256:8d44614c74798322c4e07fbe0ecb15cfbb5879d69b484628555f58ade06f0d8c start-dev --import-realm)
+      issuer_endpoint=$(docker port "$keycloak_id" 8080/tcp)
+      export IDENTITY_ISSUER="http://$issuer_endpoint/realms/minimum" IDENTITY_AUDIENCE=minimum-api IDENTITY_ALGORITHM=RS256
+      curl -fsS --retry 36 --retry-all-errors --retry-delay 2 "$IDENTITY_ISSUER/.well-known/openid-configuration" -o "$root/discovery.json"
+      jq -e --arg expected "$IDENTITY_ISSUER" '.issuer == $expected' "$root/discovery.json" >/dev/null
+    }
+    start_keycloak "127.0.0.1:"
     python3 "$profile/keycloak_check.py" trust "$root/config" --issuer "$IDENTITY_ISSUER"
     helm_identity+=(--set-string issuer="$IDENTITY_ISSUER" --set-string audience="$IDENTITY_AUDIENCE" --set-string algorithm=RS256)
     tenant=$(cat "$root/config/tenant")
@@ -87,7 +93,14 @@ case $engine in
   *) exit 2 ;;
 esac
 if [[ $identity_mode == keycloak ]]; then
-  python3 "$profile/keycloak_check.py" check "$root/config" --issuer "$IDENTITY_ISSUER" --api "http://$api"
+  python3 "$profile/keycloak_check.py" check "$root/config" --issuer "$IDENTITY_ISSUER" --api "http://$api" > "$root/before.json"
+  # Re-run startup import against the same realm and the same external issuer URL.
+  docker stop "$keycloak_id" >/dev/null
+  docker rm "$keycloak_id" >/dev/null
+  keycloak_id=
+  start_keycloak "$issuer_endpoint"
+  python3 "$profile/keycloak_check.py" check "$root/config" --issuer "$IDENTITY_ISSUER" --api "http://$api" > "$root/after.json"
+  cmp "$root/before.json" "$root/after.json"
 else
   python3 "$profile/check.py" --api "http://$api" --issuer "http://$issuer" --accounts "$root/config/clients.json"
 fi
