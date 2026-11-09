@@ -2,7 +2,10 @@ import hashlib
 import io
 import json
 from pathlib import Path
+import tarfile
 import tempfile
+import zipfile
+from deployment.archive import export_test
 import unittest
 from unittest.mock import patch
 from urllib.error import HTTPError
@@ -40,6 +43,30 @@ class FetchTests(unittest.TestCase):
         self.assertTrue(all(x[1].startswith('sha256:') for x in self.client.calls[1:]))
         self.assertEqual(b.verify(self.target,receipt['bundle_reference'])['candidate'],receipt['candidate'])
         self.assertEqual(json.loads((self.target/'selection.json').read_text()),receipt)
+
+    def test_download_archives_match_the_verified_directory(self):
+        receipt = self.fetch()
+        files = {p.relative_to(self.target).as_posix(): p.read_bytes()
+                 for p in self.target.rglob('*') if p.is_file()}
+        for suffix in ['.tar.gz', '.zip']:
+            output = self.root / ('bundle' + suffix)
+            actual = export_test(self.client.repository, 'test', '0.24.0', output, self.client)
+            self.assertEqual(actual, receipt)
+            if suffix == '.zip':
+                with zipfile.ZipFile(output) as archive:
+                    self.assertEqual({n: archive.read(n) for n in archive.namelist()}, files)
+            else:
+                with tarfile.open(output) as archive:
+                    self.assertEqual({m.name: archive.extractfile(m).read() for m in archive}, files)
+            with self.assertRaises(FileExistsError):
+                export_test(self.client.repository, 'test', '0.24.0', output, self.client)
+
+    def test_invalid_download_never_publishes_archive(self):
+        self.client.bad_blob = True
+        output = self.root / 'broken.zip'
+        with self.assertRaises(ValueError):
+            export_test(self.client.repository, 'test', '0.24.0', output, self.client)
+        self.assertFalse(output.exists())
 
     def test_exact_test_selector_is_allowed(self):self.assertEqual(self.fetch('0.24.0-test.7')['candidate'],'0.24.0-test.7')
 

@@ -60,6 +60,21 @@ local bundle/plan directories as operator-owned inputs. Consumers rehash every
 asset and rederive the lock before use; editing a cached lock does not change the
 selected images. This does not make a malicious repository trustworthy.
 
+## Export a downloadable bundle
+
+Use the same registry selector to produce a tarball or ZIP. For example:
+
+```sh
+python scripts/fetch_test_bundle.py --repository ghcr.io/hyperme-sh/spanopticon-fleet-test \
+  --selector test --next 0.24.0 --archive ./fleet.tar.gz
+```
+
+Use a `.zip` suffix for ZIP. Extract into an empty directory and use that
+directory with the Compose or Helm commands below. The archive contains the
+verified registry blobs, deployment lock and selection receipt. The receipt
+identifies the selected GHCR manifest. Component image layers are pulled from
+their recorded registry references at deployment time.
+
 ## Compose plan and apply
 
 Select your actual test Docker context and provision the credential file required
