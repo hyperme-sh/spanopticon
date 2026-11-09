@@ -270,3 +270,25 @@ A successful run prints the blob name, both version IDs and the verified digest.
 Keep that receipt to check expiry on subsequent lifecycle runs. The two synthetic
 versions remain under the configured retention prefix. This drill does not
 change storage account policies.
+
+The local Helm qualification also signs in a synthetic human through Keycloak
+in headless Chrome using authorization code flow and S256 PKCE. To run the
+local Helm check, install Chrome and Python Playwright 1.56.0 in the test
+environment. The check exercises contact proof, rejects completion by another
+subject, ends the Keycloak session and checks refresh denial. Verification
+validates signed access tokens offline. The drill uses a 30-second client
+token lifetime and checks API rejection after expiry.
+
+### Rotate the pinned issuer signing key
+
+The verifier loads one issuer public key at startup. For a planned cutover, coordinate token issuance and the verifier restart. Activate the replacement RS256 signing key in the issuer, confirm its active key ID and public key through the operator's trusted issuer administration path, then patch only `issuer.pub` in the configured Kubernetes Secret and restart the verification deployment. Preserve the service secret and erasure authority. Clients holding tokens signed by the old key must obtain fresh tokens. During the interval between issuer activation and verifier restart, newly signed tokens receive HTTP 401.
+
+The local Helm qualification creates a higher-priority RSA provider in its disposable Keycloak realm. It exercises both sides of the trust change with real tokens and verifies rejection of the former key while its token is still unexpired. This procedure uses an explicit cutover with one trusted key at a time.
+
+### Keycloak federation in a disposable installation
+
+On a disposable Keycloak installation, set `ISSUER_ORIGIN` to its browser-facing origin and `ADMIN_ORIGIN` to its trusted administration origin. Run `python -m verification.federation_check --origin "$ISSUER_ORIGIN" --admin-origin "$ADMIN_ORIGIN"` with a short-lived realm administration token on standard input. The drill creates two disposable realms and a synthetic upstream user. It checks two independent PKCE sessions, the broker's stored identity link, upstream rejection of the broker token, and deletion of both realms. It exercises the OIDC broker using HTTP login forms and does not require an employee account.
+
+Add `--verifier` in an environment with the verifier's locked dependencies and run from the repository root. The drill starts the verification API on a temporary loopback port with an empty database. It reads evidence with two independent federated sessions and checks that another broker client with a different audience receives HTTP 401.
+
+For shared Hyperme.sh TEST, follow the infrastructure fixture map and check the installed readiness receipt before signing in with the configured identity. Reserve the realm-creation drill above for disposable installations. Employee federation requires an authorized Microsoft sign-in through the deployed broker.
