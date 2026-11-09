@@ -41,8 +41,8 @@ def download(value,output):
             index['manifests'][0].setdefault('annotations',{})['org.opencontainers.image.ref.name']='docker.io/library/qualified-owner:ci'
             (layout/'index.json').write_text(json.dumps(index))
             with tarfile.open(output/'image.tar','w') as archive:
-                for item in sorted(layout.iterdir()):
-                    archive.add(item,arcname=item.name)
+                for item in [layout/'index.json', layout/'oci-layout', *sorted((layout/'blobs'/'sha256').glob('[0-9a-f]'*64))]:
+                    archive.add(item,arcname=item.relative_to(layout))
         receipt=image.verify(value,output/'image.tar')
         (output/'verified.json').write_text(json.dumps(receipt)+'\n')
         return receipt
