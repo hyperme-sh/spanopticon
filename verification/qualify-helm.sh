@@ -88,6 +88,12 @@ else
   kill "$forward"
   wait "$forward" || true
   forward=
+  bash verification/rehearse-helm-restore.sh "$pinned" "$root/contact.tar"
+  start_forward
+  python3 -m verification.keycloak_helm_check "$cfg" "$issuer" "http://$endpoint" --restored
+  kill "$forward"
+  wait "$forward" || true
+  forward=
   python3 -m verification.helm_recovery "$cfg" "$issuer"
   start_forward
   python3 -m verification.helm_recovery "$cfg" "$issuer" "http://$endpoint"

@@ -94,6 +94,8 @@ Run `python3 -m verification.qualify` from the repository root. In its disposabl
 
 The archive contains contact data and short-lived codes. The rehearsal uses synthetic contacts and a temporary archive. For an operator backup, protect the archive and retain the corresponding configuration and keys separately. Restore into isolation first. The snapshot reflects the instant writers stopped. Reconcile later contact changes, deletions, consumed challenges and adapter deliveries before serving traffic from an older snapshot.
 
+The local-mode Helm qualification also rehearses a cold restore on kind. It scales down the verification deployment, archives the state and mailbox together, replaces the chart claim with a fresh PVC and restores both directories before restarting the deployment. With fresh Keycloak tokens and the original keys, it checks owner evidence, tenant isolation and replay rejection using the recovered mailbox. The fixture deletes its disposable claim and keeps its archive only for the duration of the test. Production recovery also requires handling changes since the snapshot and the operator's backup storage and key recovery procedures.
+
 ### Recover an operator verifier after database rollback
 
 Keep the restored API, worker and adapter disconnected from traffic. Restore the service database to a fresh volume, retain the operator's independent delivery receipts, and run the migration job. Then run the following once against the restored database using the same Compose project and configuration as the migration.
