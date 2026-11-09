@@ -22,13 +22,13 @@ def probe(base,source):
 def main():
     parser=argparse.ArgumentParser();parser.add_argument('--directory',required=True,type=Path);parser.add_argument('--engine',choices=['compose','helm'],required=True);args=parser.parse_args()
     pin=json.loads((ROOT/'fleet/owner-images/hypermesh-plane.json').read_text());image.verify(pin,args.directory/'image.tar')
-    run(['docker','load','-i',str(args.directory/'image.tar')],stdout=subprocess.DEVNULL)
+    run(['docker','pull','--platform','linux/amd64',pin['source']+'@'+pin['manifest_digest']],stdout=subprocess.DEVNULL)
     project='plane-check-'+uuid.uuid4().hex[:10];password=secrets.token_hex(24);key=secrets.token_hex(32)
     with tempfile.TemporaryDirectory(prefix='plane-qualification-') as directory:
         scratch=Path(directory)
         if args.engine=='compose':
             env={**os.environ,'TEST_POSTGRES_PASSWORD':password,'TEST_TICKET_KEY':key}
-            override=scratch/'override.json';override.write_text(json.dumps({'services':{n:{'image':pin['config_digest'],'pull_policy':'never'} for n in ('plane','provision')}}))
+            override=scratch/'override.json';override.write_text(json.dumps({'services':{n:{'image':pin['source']+'@'+pin['manifest_digest'],'pull_policy':'never'} for n in ('plane','provision')}}))
             cmd=['docker','compose','-p',project,'-f',str(ROOT/'fleet/plane/compose.yaml'),'-f',str(override)]
             try:
                 run([*cmd,'up','-d','--wait','--wait-timeout','150'],env=env)
@@ -44,9 +44,7 @@ def main():
             try:
                 run(['kind','create','cluster','--name',project,'--image','kindest/node:v1.37.0@sha256:a1ed56cfb0e7b93589bdf97c8cd566405a265939e3620fc4f5de89adff580ae5','--wait','120s'],env=env)
                 run(['kind','load','image-archive',str(args.directory/'image.tar'),'--name',project],env=env)
-                ref=(args.directory/'image.ref').read_text().strip()
-                image.b.require(image.b.matches(r'hypermesh-plane:core-[0-9]+-[0-9]+',ref),'Unexpected retained image reference')
-                run(['docker','exec',project+'-control-plane','ctr','-n','k8s.io','images','tag','docker.io/library/'+ref,pin['destination']+'@'+pin['manifest_digest']])
+                run(['docker','exec',project+'-control-plane','ctr','-n','k8s.io','images','tag','docker.io/library/qualified-owner:ci',pin['destination']+'@'+pin['manifest_digest']])
                 secret={'apiVersion':'v1','kind':'Secret','metadata':{'name':'plane-test'},'stringData':{'postgres-password':password,'ticket-key':key,'database-url':f'postgresql+psycopg://plane_test:{password}@{project}-postgres:5432/plane_test'}}
                 run(['kubectl','apply','-f','-'],env=env,input=json.dumps(secret).encode(),stdout=subprocess.DEVNULL)
                 helm=['helm','upgrade','--install',project,str(ROOT/'fleet/plane/chart'),'--set','existingSecret=plane-test','--wait','--timeout','180s']

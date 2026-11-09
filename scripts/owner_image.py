@@ -6,6 +6,7 @@ import os
 from pathlib import Path
 import subprocess
 import sys
+import tarfile
 import tempfile
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
 from deployment import bundle as b
@@ -29,6 +30,22 @@ def owner_token_scope(value,document):
 
 
 def download(value,output):
+    if value['schema'] == 2:
+        output.mkdir(mode=0o700)
+        reference = value['source']+'@'+value['manifest_digest']
+        with tempfile.TemporaryDirectory(prefix='owner-layout-') as scratch:
+            layout = Path(scratch)/'layout'
+            command(['oras','cp','--to-oci-layout',reference,str(layout)+':verified'])
+            index = b.document((layout/'index.json').read_bytes())
+            # Name the verified root for containerd imports during Helm qualification.
+            index['manifests'][0].setdefault('annotations',{})['org.opencontainers.image.ref.name']='docker.io/library/qualified-owner:ci'
+            (layout/'index.json').write_text(json.dumps(index))
+            with tarfile.open(output/'image.tar','w') as archive:
+                for item in sorted(layout.iterdir()):
+                    archive.add(item,arcname=item.name)
+        receipt=image.verify(value,output/'image.tar')
+        (output/'verified.json').write_text(json.dumps(receipt)+'\n')
+        return receipt
     repo='hyperme-sh/'+value['owner']
     def get(path):
         return b.document(command(['gh','api','repos/'+repo+path],stdout=subprocess.PIPE))

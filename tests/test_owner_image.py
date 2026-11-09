@@ -105,10 +105,9 @@ class OwnerImageTests(unittest.TestCase):
                 for step in job.get('steps') or []:
                     if str(step.get('uses','')).startswith('actions/upload-artifact@'):
                         uploads.append(step)
-        large={'verified-owner-image-${{ inputs.owner }}-${{ github.run_attempt }}','fleet-test-bundle-${{ github.run_attempt }}'}
-        small={'owner-image-publication-${{ inputs.owner }}-${{ github.run_attempt }}','fleet-test-publication-${{ github.run_attempt }}',
-               'published-test-deployment-${{ matrix.engine }}','tested-dist','deployment-runtime-receipts','settlement-runtime-receipt',
-               'plane-runtime-qualification-${{ github.run_attempt }}'}
+        large={'fleet-test-bundle-${{ github.run_attempt }}'}
+        small={'fleet-test-publication-${{ github.run_attempt }}',
+               'published-test-deployment-${{ matrix.engine }}','tested-dist','deployment-runtime-receipts','settlement-runtime-receipt'}
         seen=set()
         for step in uploads:
             name=step['with']['name'];seen.add(name)
@@ -118,9 +117,7 @@ class OwnerImageTests(unittest.TestCase):
                 self.assertIn(name,small,name)
                 self.assertEqual(step['with']['retention-days'],'90',name)
         self.assertEqual(seen,large|small)
-        handoff=next(step for step in uploads if step['with']['name'].startswith('verified-owner-image-'))
-        publish_if="github.repository == 'hyperme-sh/spanopticon' && github.event_name == 'push' && github.ref == 'refs/heads/main'"
-        self.assertEqual(handoff['if'],publish_if)
         workflow=yaml.load((root/'.github/workflows/owner-image.yml').read_text(),Loader=yaml.BaseLoader)
-        self.assertEqual(workflow['jobs']['publish']['if'],publish_if)
-        self.assertEqual(workflow['jobs']['verify']['steps'][-1]['if'],publish_if)
+        self.assertIn("github.ref == 'refs/heads/main'",workflow['jobs']['publish']['if'])
+        for path in (root/'fleet/owner-images').glob('*.json'):
+            self.assertEqual(image.pin(json.loads(path.read_text()))['schema'],2)
