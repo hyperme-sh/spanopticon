@@ -256,6 +256,21 @@ The command exposes the destination only after the bytes match the trusted
 digest. Restore into isolation and replay the current erasure authority before
 starting verification workers or serving requests.
 
+### Rehearse recovery on an Azure test container
+
+With Azure CLI signed in to a versioning-enabled test container, run
+`python3 -m verification.qualify_azure ACCOUNT CONTAINER` from the repository
+root. The identity needs blob read and write access. The drill uploads synthetic
+verification records under a fresh archive name, writes a second version with
+an ETag condition, removes its local databases and downloads the first version
+by ID. It checks readiness refusal before erasure replay and verifies tenant
+evidence and mailbox isolation after replay.
+
+A successful run prints the blob name, both version IDs and the verified digest.
+Keep that receipt to check expiry on subsequent lifecycle runs. The two synthetic
+versions remain under the configured retention prefix. This drill does not
+change storage account policies.
+
 The local Helm qualification also signs in a synthetic human through Keycloak
 in headless Chrome using authorization code flow and S256 PKCE. To run the
 local Helm check, install Chrome and Python Playwright 1.56.0 in the test
