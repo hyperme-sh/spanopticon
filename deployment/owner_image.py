@@ -21,6 +21,16 @@ def sha(path):
 
 
 def pin(value):
+    if value.get('schema') == 2:
+        b.keys(value, ('schema','owner','source','source_revision','manifest_digest','config_digest','destination'), 'GHCR image pin')
+        owner = value['owner']
+        b.require(owner in OWNERS and value['destination'] == 'ghcr.io/hyperme-sh/spanopticon-'+owner, 'Unexpected image destination')
+        package = 'core' if owner == 'hypermesh-plane' else 'runtime'
+        b.require(value['source'] in (value['destination'], 'ghcr.io/hyperme-sh/'+owner+'/'+package), 'Unexpected GHCR source')
+        b.require(b.matches(r'[0-9a-f]{40}',value['source_revision']), 'Invalid source revision')
+        for key in ('manifest_digest','config_digest'):
+            b.require(b.matches(b.DIGEST,value[key]), 'Invalid image digest')
+        return value
     b.keys(value,('schema','owner','source_revision','run_id','artifact_id','artifact_digest','archive_digest',
                   'manifest_digest','config_digest','destination'),'owner image pin')
     owner=value['owner'];b.require(owner in OWNERS and type(value['schema']) is int and value['schema']==1,'Unsupported image owner')
@@ -67,7 +77,7 @@ def unpack(value,archive,output):
 
 def verify(value,path):
     value=pin(value);path=Path(path)
-    b.require(path.stat().st_size<=LIMIT and sha(path)==value['archive_digest'],'Image archive digest mismatch')
+    b.require(path.stat().st_size<=LIMIT and (value['schema']==2 or sha(path)==value['archive_digest']),'Image archive digest mismatch')
     verified={}
     runtime_configs=set()
     with tarfile.open(path,mode='r:') as archive:
@@ -115,4 +125,4 @@ def verify(value,path):
         b.require(value['config_digest'] in runtime_configs,'Expected runtime config absent')
     return {'schema':1,'owner':value['owner'],'source_revision':value['source_revision'],
             'image':value['destination']+'@'+value['manifest_digest'],'blobs':verified,
-            'archive_digest':value['archive_digest'],'run_id':value['run_id'],'artifact_id':value['artifact_id']}
+            **{k:value[k] for k in ('archive_digest','run_id','artifact_id') if k in value}}

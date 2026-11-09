@@ -1,11 +1,8 @@
 {
-  "schema": 1,
+  "schema": 2,
+  "source": "ghcr.io/hyperme-sh/spanopticon-hypermesh-plane",
   "owner": "hypermesh-plane",
   "source_revision": "a4c612be1d005ee3ae1b565227f1489d4d9926fc",
-  "run_id": 42162402377,
-  "artifact_id": 13476733997,
-  "artifact_digest": "sha256:01d11774f2f2c69f100251776742bd33ee0bca35939cfbd21d95821514687773",
-  "archive_digest": "sha256:8d46e7067a72c70a60b26e1dbc981d83f005df063ccdf6a676f642a665f43199",
   "manifest_digest": "sha256:95cde2049c460fe37626e4036378bc200099f2f8c93c630b346dc433811fc072",
   "config_digest": "sha256:7105699f1937cba96cb18a34816f6110c72d53b2783b52c1015545176836015f",
   "destination": "ghcr.io/hyperme-sh/spanopticon-hypermesh-plane"
