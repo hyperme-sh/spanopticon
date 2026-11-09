@@ -6,7 +6,7 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-from verification import operator_delivery, store
+from verification import operator_delivery, recover_operator, store
 
 
 class OperatorDeliveryTests(unittest.TestCase):
@@ -33,6 +33,23 @@ class OperatorDeliveryTests(unittest.TestCase):
                 self.assertFalse(operator_delivery.dispatch_one())
                 send.assert_called_once()
             self.assertFalse(store.complete(name, cid, store.delivery_code(store.key(), cid)))
+
+    def test_recovery_invalidates_proofs_before_resuming_issuance(self):
+        def issue(scope, key):
+            cid = store.create(scope, scope + "@example.test", key)["challenge_id"]
+            with patch.object(operator_delivery, "exchange", return_value="accepted"):
+                self.assertTrue(operator_delivery.dispatch_one())
+            return cid, store.delivery_code(store.key(), cid)
+
+        cid, code = issue("verified", "old")
+        self.assertTrue(store.complete("verified", cid, code))
+        pending, answer = issue("pending", "old")
+        recover_operator.invalidate_snapshot_proofs()
+        recover_operator.invalidate_snapshot_proofs()
+        self.assertFalse(store.evidence("verified")["verified"])
+        self.assertFalse(store.complete("pending", pending, answer))
+        fresh, answer = issue("pending", "new")
+        self.assertTrue(store.complete("pending", fresh, answer))
 
     def test_subject_limit_and_window_recovery(self):
         with patch.dict(os.environ, VERIFICATION_LIMIT_SUBJECT="1"):

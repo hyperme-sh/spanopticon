@@ -1,5 +1,6 @@
 """Exercise the minimum external issuer contract with a disposable Keycloak realm."""
 import argparse
+import base64
 import json
 import secrets
 import textwrap
@@ -49,13 +50,33 @@ def trust(directory, issuer):
         "\n".join(textwrap.wrap(key, 64)) + "\n-----END PUBLIC KEY-----\n")
 
 
+def client_token(issuer, name, secret):
+    data = urlencode({"grant_type": "client_credentials", "client_id": "minimum-" + name,
+                      "client_secret": secret}).encode()
+    with urlopen(issuer + "/protocol/openid-connect/token", data=data, timeout=10) as response:
+        return json.load(response)["access_token"]
+
+
+def check_rejected(directory, issuer):
+    for name, secret in json.loads((directory / "credentials.json").read_text()).items():
+        try:
+            client_token(issuer, name, secret)
+        except HTTPError as error:
+            body = json.load(error)
+            if error.code != 401 or body.get("error") not in {"invalid_client", "unauthorized_client"}:
+                raise RuntimeError(f"Unexpected denial: HTTP {error.code}, {body.get('error')}") from error
+        else:
+            raise RuntimeError("Startup import activated a replacement client credential")
+
+
 def check(directory, issuer, api):
+    principals = {}
     tenant = (directory / "tenant").read_text()
     for name, secret in json.loads((directory / "credentials.json").read_text()).items():
-        data = urlencode({"grant_type": "client_credentials", "client_id": "minimum-" + name,
-                          "client_secret": secret}).encode()
-        with urlopen(issuer + "/protocol/openid-connect/token", data=data, timeout=10) as response:
-            token = json.load(response)["access_token"]
+        token = client_token(issuer, name, secret)
+        payload = token.split(".")[1]
+        claims = json.loads(base64.urlsafe_b64decode(payload + "=" * (-len(payload) % 4)))
+        principals[name] = {field: claims[field] for field in ("iss", "sub", "tenant_id")}
         expected = {"owner": 200, "other": 403, "wrong-audience": 401}[name]
         try:
             result = get_tenant(api, tenant, token)
@@ -66,10 +87,12 @@ def check(directory, issuer, api):
             if expected != 200 or result != {"tenant_id": tenant}:
                 raise RuntimeError("Unexpected tenant access")
 
+    return principals
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("action", choices=["prepare", "trust", "check"])
+    parser.add_argument("action", choices=["prepare", "trust", "check", "check-rejected"])
     parser.add_argument("directory", type=Path)
     parser.add_argument("--issuer")
     parser.add_argument("--api")
@@ -79,5 +102,7 @@ if __name__ == "__main__":
         prepare(args.directory, args.audience)
     elif args.action == "trust":
         trust(args.directory, args.issuer)
+    elif args.action == "check-rejected":
+        check_rejected(args.directory, args.issuer)
     else:
-        check(args.directory, args.issuer, args.api)
+        print(json.dumps(check(args.directory, args.issuer, args.api), sort_keys=True))

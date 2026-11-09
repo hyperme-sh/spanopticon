@@ -40,7 +40,7 @@ def main(cfg, issuer, api, restored=False):
     if restored:
         cid = (cfg / "restore-challenge-id").read_text()
         assert request(api + "/v1/evidence", token=tokens["owner"])["verified"]
-        assert not request(api + "/v1/evidence", token=tokens["other"])["verified"]
+        assert request(api + "/v1/evidence", token=tokens["other"])["verified"]
         request(api + "/v1/challenges/" + cid + "/complete", token=tokens["owner"],
                 body={"code": mailbox_code(cid)}, expected=400)
         return
@@ -60,6 +60,10 @@ def main(cfg, issuer, api, restored=False):
     (cfg / "restore-challenge-id").write_text(cid)
     assert request(api + "/v1/evidence", token=owner)["verified"]
     assert not request(api + "/v1/evidence", token=tokens["other"])["verified"]
+    other_id = request(challenges, token=tokens["other"], body={"address": "peer@example.test"},
+                       key=str(uuid4()))["challenge_id"]
+    request(f"{challenges}/{other_id}/complete", token=tokens["other"], body={"code": mailbox_code(other_id)})
+
 
 
 if __name__ == "__main__":

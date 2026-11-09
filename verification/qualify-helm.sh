@@ -10,6 +10,7 @@ cleanup() {
   status=$?
   if [[ -n $forward ]]; then kill "$forward" || true; fi
   if [[ -n $issuer_id ]]; then docker rm -f "$issuer_id" >/dev/null || status=1; fi
+  if [[ -n ${realm_volume:-} ]]; then docker volume rm "$realm_volume" >/dev/null || status=1; fi
   kind delete cluster --name "$cluster" || status=1
   rm -rf -- "$root"
   exit "$status"
@@ -17,11 +18,26 @@ cleanup() {
 trap cleanup EXIT
 cfg="$root/config"
 python3 profiles/minimum/keycloak_check.py prepare "$cfg" --audience verification-api
-issuer_id=$(docker run -d -p 127.0.0.1::8080 --mount "type=bind,src=$cfg/realm.json,dst=/opt/keycloak/data/import/check.json,readonly" \
-  quay.io/keycloak/keycloak:26.5@sha256:8d44614c74798322c4e07fbe0ecb15cfbb5879d69b484628555f58ade06f0d8c start-dev --import-realm)
-issuer="http://$(docker port "$issuer_id" 8080/tcp)/realms/minimum"
-curl -fsS --retry 45 --retry-all-errors --retry-delay 2 "$issuer/.well-known/openid-configuration" -o "$root/discovery.json"
-jq -e --arg issuer "$issuer" '.issuer==$issuer' "$root/discovery.json" >/dev/null
+if [[ ${1:-local} == local ]]; then
+  python3 -m verification.human_helm_check prepare "$cfg"
+fi
+realm_volume=$(docker volume create)
+admin_env=()
+if [[ ${1:-local} == local ]]; then
+  KC_BOOTSTRAP_ADMIN_PASSWORD=$(openssl rand -hex 32)
+  export KC_BOOTSTRAP_ADMIN_PASSWORD
+  admin_env=(-e KC_BOOTSTRAP_ADMIN_USERNAME=rollover-admin -e KC_BOOTSTRAP_ADMIN_PASSWORD)
+fi
+start_issuer() {
+  issuer_id=$(docker run -d "${admin_env[@]}" -p "$1:8080" --mount "type=volume,src=$realm_volume,dst=/opt/keycloak/data" \
+    --mount "type=bind,src=$cfg/realm.json,dst=/opt/keycloak/data/import/check.json,readonly" \
+    quay.io/keycloak/keycloak:26.5@sha256:8d44614c74798322c4e07fbe0ecb15cfbb5879d69b484628555f58ade06f0d8c start-dev --import-realm)
+  issuer_endpoint=$(docker port "$issuer_id" 8080/tcp)
+  issuer="http://$issuer_endpoint/realms/minimum"
+  curl -fsS --retry 45 --retry-all-errors --retry-delay 2 "$issuer/.well-known/openid-configuration" -o "$root/discovery.json"
+  jq -e --arg issuer "$issuer" '.issuer==$issuer' "$root/discovery.json" >/dev/null
+}
+start_issuer "127.0.0.1:"
 python3 profiles/minimum/keycloak_check.py trust "$cfg" --issuer "$issuer"
 openssl rand 32 > "$cfg/secret"
 image="local-contact:$(git rev-parse HEAD)"
@@ -54,7 +70,7 @@ fi
 kubectl create secret generic verification-config --from-file="$cfg/issuer.pub" --from-file="$cfg/secret"
 helm install contact verification/chart --set-string image="$pinned" --set existingSecret=verification-config \
   --set-string issuer="$issuer" --set audience=verification-api "${adapter_options[@]}" --wait --timeout 3m
-forward_api() {
+start_forward() {
   kubectl port-forward service/contact :8000 > "$root/forward.log" 2>&1 &
   forward=$!
   for attempt in {1..30}; do
@@ -64,7 +80,7 @@ forward_api() {
   endpoint=$(sed -n 's/^Forwarding from \(127.0.0.1:[0-9]*\).*/\1/p' "$root/forward.log" | head -1)
   [[ -n $endpoint ]]
 }
-forward_api
+start_forward
 if [[ $mode == operator ]]; then
   python3 -m verification.operator_helm_check "$cfg" "$issuer" "http://$endpoint" "$node"
 else
@@ -73,6 +89,30 @@ else
   wait "$forward" || true
   forward=
   bash verification/rehearse-helm-restore.sh "$pinned" "$root/contact.tar"
-  forward_api
+  start_forward
   python3 -m verification.keycloak_helm_check "$cfg" "$issuer" "http://$endpoint" --restored
+  kill "$forward"
+  wait "$forward" || true
+  forward=
+  python3 -m verification.helm_recovery "$cfg" "$issuer"
+  start_forward
+  python3 -m verification.helm_recovery "$cfg" "$issuer" "http://$endpoint"
+  python3 -m verification.human_helm_check check "$cfg" "$issuer" "http://$endpoint"
+  docker stop "$issuer_id" >/dev/null
+  docker rm "$issuer_id" >/dev/null
+  issuer_id=
+  start_issuer "$issuer_endpoint"
+  python3 -m verification.human_helm_check retry "$cfg" "$issuer" "http://$endpoint"
+  python3 -m verification.rollover_check rotate "$cfg" "$issuer" "http://$endpoint"
+  python3 profiles/minimum/keycloak_check.py trust "$cfg" --issuer "$issuer"
+  # Patch only the issuer key. The erasure authority in this Secret has its own lifecycle.
+  jq -n --rawfile key "$cfg/issuer.pub" '{stringData:{"issuer.pub":$key}}' |
+    kubectl patch secret verification-config --type=merge --patch-file=/dev/stdin
+  kill "$forward"
+  wait "$forward" || true
+  forward=
+  kubectl rollout restart deployment/contact
+  kubectl rollout status deployment/contact --timeout=120s
+  start_forward
+  python3 -m verification.rollover_check verify "$cfg" "$issuer" "http://$endpoint"
 fi

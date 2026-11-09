@@ -29,7 +29,7 @@ Keep this mode-0700 directory outside source control and preserve the secret acr
 | POST /v1/challenges/{id}/complete | Submit the six-digit code as a JSON string field named code. Success consumes the challenge exactly once. Foreign, undelivered, expired, locked and consumed challenges give the same rejection. Five unsuccessful eligible attempts lock a challenge. |
 | GET /v1/evidence | Returns the authenticated subject's local verification method, verified flag and expiry. |
 
-The local worker alone mounts the mailbox volume. For test inspection, query its SQLite message table by challenge ID inside that container. Codes expire after ten minutes and the worker purges expired messages. Challenge issuance is limited to ten per scope per hour. Evidence lasts one day. The storage migration is explicit (`python -m verification.store`), transactional and safe to repeat. Schema versions beyond 1 require an updated migrator. The service database retains contact addresses and challenge metadata. Set a retention and deletion policy before adapting it for real contacts.
+The local worker alone mounts the mailbox volume. For test inspection, query its SQLite message table by challenge ID inside that container. Codes expire after ten minutes and the worker purges expired messages. Challenge issuance is limited to ten per scope per hour. Evidence lasts one day. The storage migration is explicit (`python -m verification.store`), transactional and safe to repeat. Schema versions beyond 1 require an updated migrator. The service database retains contact addresses and challenge metadata. See the expired-data command below for operator-controlled retention.
 
 The API and worker use the public challenge core in `challenge.py`. SQLite serializes contact changes, failed attempts, success and worker claims. Local delivery commits the mailbox row and delivered marker in one attached-database transaction with SQLite's default rollback journals. Keep both attached databases on storage supporting SQLite locking and atomic commits. The sample sends no email or SMS.
 
@@ -95,3 +95,187 @@ Run `python3 -m verification.qualify` from the repository root. In its disposabl
 The archive contains contact data and short-lived codes. The rehearsal uses synthetic contacts and a temporary archive. For an operator backup, protect the archive and retain the corresponding configuration and keys separately. Restore into isolation first. The snapshot reflects the instant writers stopped. Reconcile later contact changes, deletions, consumed challenges and adapter deliveries before serving traffic from an older snapshot.
 
 The local-mode Helm qualification also rehearses a cold restore on kind. It scales down the verification deployment, archives the state and mailbox together, replaces the chart claim with a fresh PVC and restores both directories before restarting the deployment. With fresh Keycloak tokens and the original keys, it checks owner evidence, tenant isolation and replay rejection using the recovered mailbox. The fixture deletes its disposable claim and keeps its archive only for the duration of the test. Production recovery also requires handling changes since the snapshot and the operator's backup storage and key recovery procedures.
+
+### Recover an operator verifier after database rollback
+
+Keep the restored API, worker and adapter disconnected from traffic. Restore the service database to a fresh volume, retain the operator's independent delivery receipts, and run the migration job. Then run the following once against the restored database using the same Compose project and configuration as the migration.
+
+```sh
+docker compose -f verification/compose.yaml run --rm --no-deps migrate python -m verification.recover_operator
+```
+
+This offline command invalidates all pending challenges and clears verification evidence in one transaction. A queued row in an old snapshot may already have reached the provider. The worker skips invalidated rows, and a receipt alone cannot restore contact verification. The command preserves challenge IDs, stored request keys, attempt counts and the snapshot's dispatch statuses for inspection. Repeating it before restart is safe. Running it against a live database would invalidate current proofs.
+
+Before resuming issuance, reconcile later provider receipts, erasures and request history against the snapshot. Missing post-snapshot rows also affect rate limits and idempotency. If you cannot reconstruct recent issuance counts, keep issuance paused for the full one-hour budget window. Require fresh verification for restored contacts. Provider-side message retention and recovery remain the operator's responsibility.
+
+## Expired verification data
+
+An operator can preview retention on the service database with `python -m verification.retention --retention-seconds 604800` inside the API or worker container. This example keeps rows for seven days after expiry. Choose the window to cover your incident-reconciliation needs. The minimum is one hour. Review the aggregate challenge and contact counts, then repeat with `--apply` to delete eligible rows in one transaction. The command recomputes eligibility at execution time.
+
+Challenge deletion also ends lookup by the old challenge ID and idempotency key, including for ambiguous deliveries. Clients should use fresh request keys for new challenges. Active evidence, recent issuance counters and contacts referenced by retained challenges survive cleanup. Contact rows with evidence expire only after the selected window following evidence expiry. Run during a low-write period because apply takes the SQLite writer lock. This operation covers logical rows in the service database. Mailbox expiry runs in the local worker. Provider records, backups and subject-specific erasure have separate lifecycles.
+
+### Erase one verification subject and recover a backup
+
+Stop all verification API and worker replicas and finish any in-flight provider
+request. On the operator host, record the exact token issuer, tenant UUID and
+case-sensitive subject against the authoritative verification key file.
+
+```sh
+python3 -m verification.erasure record --authority "$authority" \
+  --issuer "$issuer" --tenant "$tenant" --subject "$subject"
+```
+
+This permanently retires the issuer/tenant/subject combination in this installation.
+The file now contains the original delivery key and the hashed scope. Keep it
+in a protected directory and durably store the latest copy separately from
+service and mailbox backups. For Kubernetes, replace the verification Secret's
+original raw key value with these exact file bytes. Restrict access as for the
+original key. An obsolete or lost authority makes recovery unsafe because an old
+snapshot cannot identify subsequent deletions.
+
+With writers still stopped, mount the current authority and the service volumes
+in a fresh worker container. Run `python -m verification.erasure replay` in that
+container, with the normal worker delivery mode and mailbox volume. Recreate
+the API and worker so both mount the updated file. Repeat replay before every
+restore goes online, including when restoring an older mailbox. Recovery drops
+retired contact and challenge rows and local messages without a surviving
+challenge. API and worker startup reject restored service rows pending replay.
+The local worker also reconciles orphan messages before dispatch.
+
+If switching delivery modes, reconcile every retained local mailbox in local
+mode. Isolate archived snapshots from ordinary access until expiry. Apply the
+provider's own erasure procedure to messages it has already accepted.
+
+### Expire local backup archives
+
+Choose a retention window in whole days for the installation. Keep completed
+cold archives in an operator-owned, mode-0700 directory on a protected local
+filesystem. Write each backup to a private temporary file and rename it into
+place only after the backup command succeeds. Use the UTC capture time and a
+fresh lowercase UUID without dashes in the final name, for example
+`verification-20261107T120000Z-efad988e6f0d495ba9ed572eed74f482.tar`.
+Preserve that name when copying an archive so its original expiry still applies.
+
+Preview eligible archives with the command below. Add `--apply` to unlink them.
+Schedule apply at the interval required by your retention policy. Every finalized
+archive at or beyond the chosen age is eligible, including the last one.
+The command scans only the specified directory and leaves symlinks, directories
+and partial archives alone.
+
+```sh
+python3 -m verification.backup_expiry "$archive_directory" --retention-days "$retention_days"
+```
+
+Apply retention independently to replicas, object versions and storage snapshots.
+Unlinking a local file does not erase those copies. Keep the current erasure
+authority separately and replay it before bringing any restored archive online.
+
+### Keep an off-host filesystem replica over SSH
+
+Provision a dedicated backup account on a Linux SSH host with Python 3.11 or
+later. Install the matching verification modules on its Python path, give the
+account a private mode-0700 `archives` directory and pin its host key in the
+client SSH configuration. Use encrypted storage and restrict the account to
+the backup operator. Keep the trusted archive name, SHA-256 digest and current
+erasure authority separately from this replica.
+
+For a completed cold archive, use its original finalized name and trusted
+digest. The following uses a configured SSH alias named `verification-backup`.
+The receiver verifies the stream before atomically publishing a new archive.
+A duplicate name fails without overwriting the existing copy.
+
+```sh
+ssh -o BatchMode=yes -o StrictHostKeyChecking=yes verification-backup \
+  python3 -m verification.backup_replica put archives "$name" "$sha256" < "$archive"
+ssh verification-backup python3 -m verification.backup_expiry archives --retention-days 30
+```
+
+Choose the retention window for this host and schedule the same expiry command
+with `--apply`. Its cutoff uses snapshot time even for a newly transferred
+copy. For recovery, download into a new private temporary file. Check both the
+SSH exit status and the independently held digest before restoring the archive
+in isolation and replaying the current erasure authority.
+
+```sh
+umask 077
+snapshot=$(mktemp)
+ssh -o BatchMode=yes -o StrictHostKeyChecking=yes verification-backup \
+  python3 -m verification.backup_replica get archives "$name" "$sha256" > "$snapshot" &&
+  printf '%s  %s\n' "$sha256" "$snapshot" | sha256sum --check
+```
+
+The CI rehearsal uses a separate SSH server container and filesystem, discards
+the local archive and Compose volumes, and starts the service from the retained
+replica. Configure expiry separately for any snapshots or object-store copies
+of that filesystem.
+
+### Expire versioned S3 backups
+
+On the backup host, install boto3 and use an identity scoped to the backup
+bucket and prefix. Preview with the command below. Choose the retention window
+and schedule the same command with `--apply` to remove eligible version IDs.
+
+```sh
+python3 -m verification.s3_expiry "$bucket" 'verification/cold/' --retention-days 30
+```
+
+Use a dedicated, versioning-enabled prefix and finalized archive names as above.
+Serialize pruning with replication and other writers to that prefix. The cutoff
+uses the capture time in the archive name for all its versions. Data versions
+are removed before delete markers. A failed deletion stops the run and can be
+retried. Object Lock retention and legal holds remain effective. The operator
+needs GetBucketVersioning, ListBucketVersions and DeleteObjectVersion access.
+
+Record the exact bucket, key, version ID and SHA-256 at backup time in independent
+custody. Fetch that version, verify its digest and replay the current erasure
+authority before serving restored data. Test the procedure against each actual
+storage provider and separately account for replicas and storage snapshots.
+
+### Retain and recover verification archives in Azure Blob Storage
+
+Use a private, versioning-enabled block blob container. Record the account,
+container, blob name, upload version ID and SHA-256 independently of the archive.
+The sample lifecycle rule in `azure/retention-rule.json` covers finalized archive
+names under `verification-backups/cold/verification-`. Reserve that prefix for
+completed uploads. Merge the rule into the storage account's existing lifecycle
+policy and set the three retention periods to the installation's requirements.
+
+The example uses 30 days since modification for current blobs and 30 days since
+creation for previous versions and snapshots. Copying an old archive into Azure
+starts a new storage-age window. Lifecycle processing is asynchronous. Account
+soft-delete retention can keep expired bytes recoverable beyond that window.
+[Azure lifecycle deletion](https://learn.microsoft.com/en-us/azure/storage/blobs/lifecycle-management-policy-delete)
+
+Authenticate Azure CLI with the recovery identity and give it blob read access
+on the backup container. Download the recorded version to a new file:
+
+```sh
+bash verification/azure/fetch-version.sh "$account" "$container" "$blob" \
+  "$version_id" "$trusted_sha256" "$destination"
+```
+
+The command exposes the destination only after the bytes match the trusted
+digest. Restore into isolation and replay the current erasure authority before
+starting verification workers or serving requests.
+
+The local Helm qualification also signs in a synthetic human through Keycloak
+in headless Chrome using authorization code flow and S256 PKCE. To run the
+local Helm check, install Chrome and Python Playwright 1.56.0 in the test
+environment. The check exercises contact proof, rejects completion by another
+subject, ends the Keycloak session and checks refresh denial. Verification
+validates signed access tokens offline. The drill uses a 30-second client
+token lifetime and checks API rejection after expiry.
+
+### Rotate the pinned issuer signing key
+
+The verifier loads one issuer public key at startup. For a planned cutover, coordinate token issuance and the verifier restart. Activate the replacement RS256 signing key in the issuer, confirm its active key ID and public key through the operator's trusted issuer administration path, then patch only `issuer.pub` in the configured Kubernetes Secret and restart the verification deployment. Preserve the service secret and erasure authority. Clients holding tokens signed by the old key must obtain fresh tokens. During the interval between issuer activation and verifier restart, newly signed tokens receive HTTP 401.
+
+The local Helm qualification creates a higher-priority RSA provider in its disposable Keycloak realm. It exercises both sides of the trust change with real tokens and verifies rejection of the former key while its token is still unexpired. This procedure uses an explicit cutover with one trusted key at a time.
+
+### Keycloak federation in a disposable installation
+
+On a disposable Keycloak installation, set `ISSUER_ORIGIN` to its browser-facing origin and `ADMIN_ORIGIN` to its trusted administration origin. Run `python -m verification.federation_check --origin "$ISSUER_ORIGIN" --admin-origin "$ADMIN_ORIGIN"` with a short-lived realm administration token on standard input. The drill creates two disposable realms and a synthetic upstream user. It checks two independent PKCE sessions, the broker's stored identity link, upstream rejection of the broker token, and deletion of both realms. It exercises the OIDC broker using HTTP login forms and does not require an employee account.
+
+Add `--verifier` in an environment with the verifier's locked dependencies and run from the repository root. The drill starts the verification API on a temporary loopback port with an empty database. It reads evidence with two independent federated sessions and checks that another broker client with a different audience receives HTTP 401.
+
+For shared Hyperme.sh TEST, follow the infrastructure fixture map and check the installed readiness receipt before signing in with the configured identity. Reserve the realm-creation drill above for disposable installations. Employee federation requires an authorized Microsoft sign-in through the deployed broker.

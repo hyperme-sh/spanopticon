@@ -1,4 +1,6 @@
 """Run the authenticated HTTP journey against isolated Compose services."""
+from datetime import datetime, timezone
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -11,6 +13,7 @@ from urllib.request import Request, urlopen
 from uuid import uuid4
 
 from profiles.minimum.setup import setup
+from verification.backup_expiry import expire
 
 
 def request(url, *, body=None, token=None, key=None, expected=200):
@@ -94,6 +97,21 @@ def main():
             assert request(api + "/v1/evidence", token=owner)["verified"]
             assert not request(api + "/v1/evidence", token=other)["verified"]
             assert not request(api + "/v1/evidence", token=tokens["colleague"])["verified"]
+            # Age a separate disposable tenant's challenge and exercise the
+            # shipped CLI against the running service's actual SQLite volume.
+            stale = request(api + "/v1/challenges", body={"address": "expired@example.test"},
+                            key=str(uuid4()), token=other)
+            compose("exec", "-T", "api", "python", "-c",
+                    "import sys; from verification import store; "
+                    "db=store.connect(); db.execute('UPDATE challenge SET created=1,expires=2 WHERE id=?',"
+                    "(sys.argv[1],)); db.commit(); db.close()", stale["challenge_id"])
+            command = ("exec", "-T", "api", "python", "-m", "verification.retention", "--retention-seconds", "3600")
+            preview = json.loads(compose(*command))
+            assert (preview["challenge_rows"], preview["contact_rows"], preview["applied"]) == (1, 1, False)
+            assert json.loads(compose(*command, "--apply")) == preview | {"applied": True}
+            assert json.loads(compose(*command))["challenge_rows"] == 0
+            assert request(api + "/v1/evidence", token=owner)["verified"]
+
             pending = request(api + "/v1/challenges",
                               body={"address": "pending@example.test"}, token=other, key=str(uuid4()))
             pending_id = pending["challenge_id"]
@@ -102,13 +120,44 @@ def main():
             # Both SQLite stores share one recovery point. Stop every writer before copying.
             compose("stop", "api", "worker")
             tar = prefix + ["run", "--rm", "--no-deps", "-T", "worker", "tar", "-C", "/"]
-            with tempfile.TemporaryFile() as snapshot:
-                subprocess.run(tar + ["-cf", "-", "state", "mailbox"], env=env, stdout=snapshot,
-                               check=True, timeout=60)
+            with tempfile.TemporaryDirectory() as directory:
+                archives = Path(directory)
+                stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+                retained = archives / f"verification-{stamp}-{uuid4().hex}.tar"
+                with retained.open("xb") as snapshot:
+                    subprocess.run(tar + ["-cf", "-", "state", "mailbox"], env=env, stdout=snapshot,
+                                   check=True, timeout=60)
+                expired = archives / f"verification-20000101T000000Z-{uuid4().hex}.tar"
+                expired.write_bytes(retained.read_bytes())
+                ssh_config = os.environ.get("VERIFICATION_CI_SSH_CONFIG")
+                if ssh_config:
+                    remote = ["ssh", "-F", ssh_config, "replica", "python3", "-m"]
+                    remote_archive = remote + ["verification.backup_replica"]
+                    remote_expiry = remote + ["verification.backup_expiry", "archives", "--retention-days", "1"]
+                    digest = hashlib.sha256(retained.read_bytes()).hexdigest()
+                    for archive in (expired, retained):
+                        with archive.open("rb") as source:
+                            subprocess.run(remote_archive + ["put", "archives", archive.name, digest],
+                                           stdin=source, check=True, timeout=30)
+                    for flags, count in [([], 1), (["--apply"], 1), (["--apply"], 0)]:
+                        report = subprocess.check_output(remote_expiry + flags, timeout=30)
+                        assert json.loads(report)["eligible_archives"] == count
+                    missing = subprocess.run(remote_archive + ["get", "archives", expired.name, digest],
+                                             capture_output=True, timeout=30)
+                    assert missing.returncode and not missing.stdout
+                assert expire(archives, 1)["eligible_archives"] == 1 and expired.exists()
+                assert expire(archives, 1, apply=True)["eligible_archives"] == 1 and not expired.exists()
+                assert expire(archives, 1, apply=True)["eligible_archives"] == 0
                 compose("down", "--volumes")
-                snapshot.seek(0)
-                subprocess.run(tar + ["--no-same-owner", "-xf", "-"], env=env, stdin=snapshot,
-                               check=True, timeout=60)
+                if ssh_config:
+                    retained.unlink()
+                    with retained.open("xb") as restored:
+                        subprocess.run(remote_archive + ["get", "archives", retained.name, digest],
+                                       stdout=restored, check=True, timeout=30)
+                    assert hashlib.sha256(retained.read_bytes()).hexdigest() == digest
+                with retained.open("rb") as snapshot:
+                    subprocess.run(tar + ["--no-same-owner", "-xf", "-"], env=env, stdin=snapshot,
+                                   check=True, timeout=60)
             compose("up", "-d", "--no-build", "--wait")
             api = "http://" + compose("port", "api", "8000")
             assert request(api + "/v1/evidence", token=owner)["verified"]

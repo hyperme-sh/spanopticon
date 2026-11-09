@@ -2,7 +2,7 @@ name: Public contact verification
 on:
   workflow_dispatch:
   pull_request:
-    paths: ['verification/**', 'tests/test_local_verification.py', 'tests/test_operator_delivery.py', 'examples/operator/**', 'profiles/minimum/setup.py', 'profiles/minimum/keycloak_check.py', 'scripts/install_deployment_test_tools.py', '.github/workflows/local-verification.yml']
+    paths: ['verification/**', 'tests/test_local_verification.py', 'tests/test_verification_backup_expiry.py', 'tests/test_verification_backup_replica.py', 'tests/test_verification_azure_backup.py', 'tests/test_operator_delivery.py', 'examples/operator/**', 'profiles/minimum/setup.py', 'profiles/minimum/keycloak_check.py', 'scripts/install_deployment_test_tools.py', '.github/workflows/local-verification.yml']
 permissions:
   contents: read
 jobs:
@@ -14,9 +14,24 @@ jobs:
         with:
           persist-credentials: false
       - run: python3 -m unittest discover -s tests -p test_local_verification.py
-      - run: python3 -m verification.qualify
+      - run: python3 -m unittest discover -s tests -p test_verification_erasure.py
+      - run: python3 -m unittest discover -s tests -p test_verification_backup_expiry.py
+      - run: python3 -m unittest discover -s tests -p test_verification_backup_replica.py
+      - run: bash verification/qualify_backup_ssh.sh
       - run: python3 -m unittest discover -s tests -p test_operator_delivery.py
       - run: python3 -m verification.qualify_operator
+  versioned-backups:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - run: python3 -m unittest discover -s tests -p test_verification_azure_backup.py
+      - run: |
+          python3 -m venv "$RUNNER_TEMP/backup-tests"
+          "$RUNNER_TEMP/backup-tests/bin/pip" install 'moto[s3]==5.1.11' 'boto3==1.38.46'
+          "$RUNNER_TEMP/backup-tests/bin/python" -m verification.qualify_s3
   keycloak-helm:
     strategy:
       fail-fast: false
@@ -31,4 +46,9 @@ jobs:
       - run: |
           python3 scripts/install_deployment_test_tools.py --output "$RUNNER_TEMP/verification-tools"
           echo "$RUNNER_TEMP/verification-tools" >> "$GITHUB_PATH"
+      - if: matrix.delivery == 'local'
+        run: |
+          python3 -m venv "$RUNNER_TEMP/human-browser"
+          "$RUNNER_TEMP/human-browser/bin/pip" install playwright==1.56.0
+          echo "$RUNNER_TEMP/human-browser/bin" >> "$GITHUB_PATH"
       - run: bash verification/qualify-helm.sh "${{ matrix.delivery }}"
