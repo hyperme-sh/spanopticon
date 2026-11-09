@@ -38,6 +38,9 @@ def download(value,output):
             command(['oras','cp','--to-oci-layout',reference,str(layout)+':verified'])
             index = b.document((layout/'index.json').read_bytes())
             # Name the verified root for containerd imports during Helm qualification.
+            roots = [d for d in index['manifests'] if d.get('digest') == value['manifest_digest']]
+            b.require(roots, 'Pinned manifest missing from registry layout')
+            index['manifests'] = [roots[0]]
             index['manifests'][0].setdefault('annotations',{})['org.opencontainers.image.ref.name']='docker.io/library/qualified-owner:ci'
             (layout/'index.json').write_text(json.dumps(index))
             with tarfile.open(output/'image.tar','w') as archive:
