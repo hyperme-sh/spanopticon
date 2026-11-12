@@ -4,6 +4,8 @@ import json
 from pathlib import Path
 import subprocess
 import tempfile
+import tarfile
+import io
 import zipfile
 
 from release.preparation import prepare
@@ -69,10 +71,24 @@ def exercise(case):
             artifact.rename(renamed)
             artifact = renamed
             record['artifacts']['component'] = renamed.name
-        provenance = root / 'candidate/preparation.json'
+        if case == 'wheel-to-sdist':
+            archive_path = artifact.with_name('component-1.0.1.tar.gz')
+            with tarfile.open(archive_path, 'w:gz') as archive:
+                data = b'Metadata-Version: 2.3\nName: component\nVersion: 1.0.1\nRequires-Python: >=3.12\n'
+                member = tarfile.TarInfo('component-1.0.1/PKG-INFO')
+                member.size = len(data)
+                archive.addfile(member, io.BytesIO(data))
+            component['artifact'].update(uri='https://example.invalid/' + archive_path.name,
+                sha256=hashlib.sha256(archive_path.read_bytes()).hexdigest())
+            component['installer_artifact'] = archive_path.name
+            declaration = json.loads((root / 'candidate/release.json').read_text())
+            declaration['components']['component'] = component
+            write_json(root / 'candidate/release.json', declaration)
+            record['artifacts']['component'] = archive_path.name
+        provenance = root / 'candidate/preparation.json' 
         write_json(provenance, record)
         options = {}
-        if case in {'stable-baseline', 'test-baseline', 'changed-installer', 'renamed-wheel', 'new-component', 'changed-wheel-tags'}:
+        if case in {'stable-baseline', 'test-baseline', 'changed-installer', 'renamed-wheel', 'new-component', 'changed-wheel-tags', 'wheel-to-sdist'}:
             baseline = root / 'baseline'
             old_artifact, old = bundle(baseline / 'releases/accepted', '1.0.0')
             tag = 'test-' + revision if case == 'test-baseline' else 'v1.0.0'

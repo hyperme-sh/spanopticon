@@ -3,6 +3,7 @@ from pathlib import Path
 import hashlib
 import re
 import subprocess
+from urllib.parse import urlsplit, unquote
 
 from release.policy import contract_path, json_document, load_bundle, require, validate
 from release.accepted import verify_accepted_record
@@ -69,9 +70,19 @@ def prepare(candidate, provenance, source_root, *, baseline_root=None, repositor
         previous = Path(baseline_root) / 'releases/accepted/release.json'
         old, _ = load_bundle(previous)
         validate(previous, candidate)
-        for name, installer in installers.items():
-            if name not in old['components']:
+        for name in set(bundle['components']) & set(old['components']):
+            previous_component = old['components'][name]
+            prior_path = previous_component.get('installer_artifact')
+            prior_uri = previous_component['artifact']['uri']
+            # The previous distribution also determines whether an installer
+            # comparison is mandatory. A new format cannot remove that duty.
+            previous_is_wheel = unquote(urlsplit(prior_uri).path).lower().endswith('.whl')
+            if prior_path:
+                previous_is_wheel = is_wheel(contract_path(previous.parent, prior_path), prior_uri)
+            if name not in installers and not previous_is_wheel:
                 continue
+            require(name in installers, 'Unsupported installer artifact format transition')
+            installer = installers[name]
             prior = contract_path(previous.parent, old['components'][name].get('installer_artifact'))
             require(hashlib.sha256(prior.read_bytes()).hexdigest() == old['components'][name]['artifact']['sha256'],
                     'Stable installer artifact digest mismatch')

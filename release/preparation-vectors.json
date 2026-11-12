@@ -50,5 +50,9 @@
   {
     "case": "changed-wheel-tags",
     "accepted": false
+  },
+  {
+    "case": "wheel-to-sdist",
+    "accepted": false
   }
 ]
