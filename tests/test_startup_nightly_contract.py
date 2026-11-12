@@ -3,7 +3,7 @@ import json
 from pathlib import Path
 import tempfile
 import unittest
-from startup.contract import fingerprint
+from startup.contract import fingerprint,binding_fingerprint
 from startup.nightly import qualify,CASES,require_schedule
 
 ROOT=Path(__file__).resolve().parents[1]
@@ -12,6 +12,8 @@ ROOT=Path(__file__).resolve().parents[1]
 class NightlyProtocolTests(unittest.TestCase):
     def test_full_protocol_and_cross_org_denials(self):
         config=json.loads((ROOT/'startup/fixtures/mapping.json').read_text())
+        config['binding']['organizations']['fyberlabs']['tenant_id']='00000000-0000-4000-8000-000000008888'
+        config['binding_sha256']=binding_fingerprint(config['binding'])
         orgs=[{'slug':s,'id':o['organization_id'],'tenant_id':o['tenant_id'],'roles':o['roles']} for s,o in sorted(config['binding']['organizations'].items())]
         stamp=fingerprint(config);calls=[]
         def owners(step,c,prior):
@@ -22,8 +24,11 @@ class NightlyProtocolTests(unittest.TestCase):
                 'sea_public_key':config['binding']['sea_public_key'],'organizations':orgs,'permissions':[]}
             if url.endswith('/scoped-session'):
                 if body['organization_id'] not in {o['id'] for o in orgs}:return 403,{}
+                self.assertEqual(body['tenant_id'],next(o['tenant_id'] for o in orgs if o['id']==body['organization_id']))
                 return 200,{'access_token':body['organization_id']}
             if body['organization_id']!=token:return 403,{}
+            self.assertEqual(body['tenant_id'],next(o['tenant_id'] for o in orgs if o['id']==token))
+            self.assertEqual(headers['X-Tenant-ID'],body['tenant_id'])
             return 200,{'allowed':True}
         with tempfile.TemporaryDirectory() as directory:
             got=list(qualify(config,{'STARTUP_AUTH_URL':'https://auth.example.invalid','STARTUP_USER_URL':'https://user.example.invalid'},
