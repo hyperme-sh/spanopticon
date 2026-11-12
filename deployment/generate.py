@@ -7,7 +7,7 @@ import sys
 import tarfile
 from deployment import bundle as b
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'scripts'))
-from new_plane import manifests
+from new_plane import artifact_manifests as manifests
 
 TEMPLATE=b'''{{- $resources := .Files.Get "resources.json" | fromJson -}}
 {{- range $resources.items }}
