@@ -68,7 +68,7 @@ class PreparationTest(unittest.TestCase):
 
     def test_wrong_lock_digest_is_rejected(self):
         self.record['locks']['requirements.lock'] = '0' * 64
-        with self.assertRaisesRegex(ValueError, 'lock digest'): self.check()
+        with self.assertRaisesRegex(ValueError, 'lock differs'): self.check()
 
     def test_untracked_lock_cannot_supply_provenance(self):
         (self.source / 'untracked.lock').write_text('untracked')
@@ -96,3 +96,13 @@ class PreparationTest(unittest.TestCase):
         (self.output / 'link').symlink_to(self.source / 'requirements.lock')
         self.record['artifacts']['package'] = 'link'
         with self.assertRaises(ValueError): self.check()
+
+    def test_assume_unchanged_lock_cannot_hide_modified_bytes(self):
+        self.git('update-index', '--assume-unchanged', 'requirements.lock')
+        (self.source / 'requirements.lock').write_text('changed')
+        self.record['locks']['requirements.lock'] = hashlib.sha256(b'changed').hexdigest()
+        with self.assertRaisesRegex(ValueError, 'committed source'): self.check()
+
+    def test_boolean_schema_is_not_a_version(self):
+        self.record['schema_version'] = True
+        with self.assertRaisesRegex(ValueError, 'schema|provenance'): self.check()

@@ -1,2 +1,4 @@
 # Parsing rendered Helm manifests; the OCI verifier and fetcher remain stdlib-only.
 PyYAML==6.0.3
+# PEP 508 parsing for offline installation-contract checks.
+packaging==25.0

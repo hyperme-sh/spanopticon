@@ -229,8 +229,41 @@ comes from the actual candidate, with no historical fleet count.
 
 This checks supplied inputs only. It does not establish that artifacts were
 freshly built from that checkout, that every dependency has been enumerated,
-that installer metadata is compatible, or that consumers passed. The owner
-build and qualification harness must establish those properties separately.
+or that consumers passed. The owner build and qualification harness must
+establish those properties separately. Installer compatibility is checked when a
+verified stable wheel baseline is supplied, as described below.
 The machine-readable result explicitly reports `publication_authorized: false`.
 A legitimate prior stable release still requires normal compatibility admission;
 a successful preparation check cannot replace that step or authorize promotion.
+
+Preparation now accepts `--baseline-root` and `--repository`. When a baseline is
+provided (or an accepted directory exists in the source checkout), it verifies
+that record through the existing stable-release verifier before comparing API
+contracts. Test snapshots, unknown registry responses and incomplete accepted
+records fail closed. A baseline wheel must also be retained as
+`installer_artifact` in its accepted component, with bytes matching the published
+artifact digest. Missing historical installer metadata is not reinterpreted as
+compatibility. Installer comparison conservatively requires unchanged Python
+requirements, dependencies, extras and entry points; independent patch versions
+remain supported.
+
+Wheel preparation also checks direct URL dependencies against `direct_urls` and
+`installed_direct_urls`, keyed first by component and then normalized dependency
+name. Each lock entry supplies the exact HTTPS URL with a SHA-256 fragment, the
+same `sha256`, and a bundle-relative `path` to the downloaded bytes. Each installed
+entry is the PEP 610 document from that installed distribution. Credential URLs,
+missing hashes, substituted URLs, changed bytes and incomplete installed records
+are rejected. VCS dependencies remain with the existing owner fixture verifier;
+this path refuses them rather than making a weaker substitution. Existing owner
+exporters and environment verifiers retain issues #10 and #15.
+
+The shared `release/preparation-vectors.json` and `preparation_contract.py` cover
+both the Spanopticon and vendored publisher path. Registry responses and package
+wheels in those vectors are synthetic. `scripts/qualify_release_preparation.py`
+is reserved for the central scheduled batch: it freshly archives this checkout,
+checks its real dependency lock, and runs the consumer contract suite from the
+extracted archive. Infra #922 owns registration and fixture cleanup. This proves
+the template bundle consumer path, not every package owner or a live deployment.
+The current source inventory is `release-inventory-2026-11-12.json`; listed
+exporter paths are an audit, not qualification or a fixed expected fleet count.
+The exact production release target remains an external owner decision.

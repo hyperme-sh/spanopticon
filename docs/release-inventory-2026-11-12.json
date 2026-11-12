@@ -1,0 +1,575 @@
+{
+  "schema_version": 1,
+  "scope": "Current hyperme-sh organization repository source inventory; presence is not qualification",
+  "repositories": [
+    {
+      "repository": "hyperme-sh/.github",
+      "revision": "a1963cff270b3336348061ae6efe638bebdea876",
+      "branch": "main",
+      "archived": false,
+      "paths": []
+    },
+    {
+      "repository": "hyperme-sh/acl-service",
+      "revision": "91f1164fb2e041dfa16522c1e7059884a7bd6c5d",
+      "branch": "main",
+      "archived": false,
+      "paths": [
+        "admission/package.json",
+        "pyproject.toml",
+        "release-policy.json",
+        "scripts/export_release_contract.py",
+        "scripts/verify_preparation_environment.py",
+        "uv.lock"
+      ]
+    },
+    {
+      "repository": "hyperme-sh/ai-service",
+      "revision": "4ea2c7dec6614378026b4aa235aa3f31b7a84d27",
+      "branch": "main",
+      "archived": false,
+      "paths": [
+        "core/ai-service/pyproject.toml",
+        "pyproject.toml",
+        "release-policy.json",
+        "scripts/export_release_contract.py",
+        "scripts/verify_preparation_environment.py",
+        "uv.lock"
+      ]
+    },
+    {
+      "repository": "hyperme-sh/aimonitoring-doc",
+      "revision": "4975b89965d37f1e32581620857ff9477b7448dd",
+      "branch": "main",
+      "archived": false,
+      "paths": []
+    },
+    {
+      "repository": "hyperme-sh/aiuditor",
+      "revision": "d8e05023ab75ef727ccd4d07d5141e0ad10f1d88",
+      "branch": "main",
+      "archived": false,
+      "paths": [
+        "pyproject.toml",
+        "release-policy.json",
+        "scripts/export_release_contract.py",
+        "scripts/verify_preparation_environment.py",
+        "uv.lock"
+      ]
+    },
+    {
+      "repository": "hyperme-sh/api-keys-service",
+      "revision": "971b1c5c63cc87d23c43f804d394d7d7d37e566e",
+      "branch": "main",
+      "archived": false,
+      "paths": [
+        "core/api-keys-service/pyproject.toml",
+        "pyproject.toml",
+        "release-policy.json",
+        "scripts/export_release_contract.py",
+        "scripts/verify_preparation_environment.py",
+        "uv.lock"
+      ]
+    },
+    {
+      "repository": "hyperme-sh/auth-service",
+      "revision": "49087d5f3dfe35a0f57b8896fcc5eaa94f66bf44",
+      "branch": "main",
+      "archived": false,
+      "paths": [
+        "core/auth-service/pyproject.toml",
+        "pyproject.toml",
+        "release-policy.json",
+        "scripts/export_release_contract.py",
+        "scripts/verify_preparation_environment.py",
+        "uv.lock"
+      ]
+    },
+    {
+      "repository": "hyperme-sh/controlplane-api",
+      "revision": "e7b798a045ca899147a8b1eafb6b9f83565e030f",
+      "branch": "main",
+      "archived": false,
+      "paths": [
+        "pyproject.toml",
+        "release-policy.json",
+        "scripts/export_release_contract.py",
+        "uv.lock"
+      ]
+    },
+    {
+      "repository": "hyperme-sh/controlplane-billing",
+      "revision": "b921ee8f2eea28f712b6d5905670c86a69db38a9",
+      "branch": "main",
+      "archived": false,
+      "paths": [
+        "packages/controlplane-accounting/pyproject.toml",
+        "pyproject.toml",
+        "release-policy.json",
+        "scripts/export_release_contract.py",
+        "uv.lock"
+      ]
+    },
+    {
+      "repository": "hyperme-sh/controlplane-core",
+      "revision": "f9e9e3c3f462a8bac4c7df1f2e977674b1c5e8a0",
+      "branch": "main",
+      "archived": false,
+      "paths": [
+        "pyproject.toml",
+        "release-policy.json",
+        "scripts/export_release_contract.py",
+        "uv.lock"
+      ]
+    },
+    {
+      "repository": "hyperme-sh/controlplane-db",
+      "revision": "8fa71d57fe0a7901ee53db226a2f9c685373c100",
+      "branch": "main",
+      "archived": false,
+      "paths": [
+        "pyproject.toml",
+        "release-policy.json",
+        "scripts/export_release_contract.py",
+        "uv.lock"
+      ]
+    },
+    {
+      "repository": "hyperme-sh/controlplane-edge",
+      "revision": "24c596b4286010abe4b70f3b38e7fe762a09a51d",
+      "branch": "main",
+      "archived": false,
+      "paths": [
+        "pyproject.toml",
+        "release-policy.json",
+        "scripts/export_release_contract.py",
+        "scripts/verify_preparation_environment.py",
+        "uv.lock"
+      ]
+    },
+    {
+      "repository": "hyperme-sh/controlplane-events",
+      "revision": "739376bb4ac4791243caa80d6d1d27e2faeb7eed",
+      "branch": "main",
+      "archived": false,
+      "paths": [
+        "pyproject.toml",
+        "release-policy.json",
+        "scripts/export_release_contract.py",
+        "uv.lock"
+      ]
+    },
+    {
+      "repository": "hyperme-sh/controlplane-identity",
+      "revision": "d1968133592f240b0bdbc6e0d4960064d45d2574",
+      "branch": "main",
+      "archived": false,
+      "paths": [
+        "compatibility/pyproject.toml",
+        "pyproject.toml",
+        "release-policy.json",
+        "scripts/export_release_contract.py",
+        "uv.lock"
+      ]
+    },
+    {
+      "repository": "hyperme-sh/controlplane-keycloak",
+      "revision": "39f7613fc37baa0407bd9bd5a8250362831c7b21",
+      "branch": "main",
+      "archived": false,
+      "paths": [
+        "pyproject.toml",
+        "release-policy.json",
+        "scripts/export_release_contract.py",
+        "uv.lock"
+      ]
+    },
+    {
+      "repository": "hyperme-sh/controlplane-models",
+      "revision": "1e0a385988248929b37b25c0cb5bf159c5d0481e",
+      "branch": "main",
+      "archived": false,
+      "paths": [
+        "pyproject.toml",
+        "release-policy.json",
+        "scripts/export_release_contract.py",
+        "uv.lock"
+      ]
+    },
+    {
+      "repository": "hyperme-sh/controlplane-portal",
+      "revision": "0586440bdc1dae07b4b92f6fed126af6bbadd722",
+      "branch": "main",
+      "archived": false,
+      "paths": [
+        "package.json",
+        "release-policy.json"
+      ]
+    },
+    {
+      "repository": "hyperme-sh/controlplane-proto",
+      "revision": "eadb4ef6d6fa4ecf612fbdcf02d8c9326b7b6d1e",
+      "branch": "main",
+      "archived": false,
+      "paths": [
+        "pyproject.toml",
+        "release-policy.json",
+        "scripts/export_release_contract.py",
+        "uv.lock"
+      ]
+    },
+    {
+      "repository": "hyperme-sh/controlplane-sdk",
+      "revision": "97c17769fa330a6dbac7075afb15f1b1340fc409",
+      "branch": "main",
+      "archived": false,
+      "paths": [
+        "pyproject.toml",
+        "release-policy.json",
+        "scripts/export_release_contract.py",
+        "sdk/rest/python/pyproject.toml",
+        "uv.lock"
+      ]
+    },
+    {
+      "repository": "hyperme-sh/controlplane-tenancy",
+      "revision": "77e3337ae2076fb8bf369ed4e728be8d18ca618d",
+      "branch": "main",
+      "archived": false,
+      "paths": [
+        "pyproject.toml",
+        "release-policy.json",
+        "scripts/export_release_contract.py",
+        "uv.lock"
+      ]
+    },
+    {
+      "repository": "hyperme-sh/controlplane-tests",
+      "revision": "7e3cb29c0ff67f9f546332b6f59837ca9fbae742",
+      "branch": "main",
+      "archived": false,
+      "paths": [
+        "integration/runtime/pyproject.toml",
+        "integration/runtime/uv.lock",
+        "pyproject.toml",
+        "release-policy.json",
+        "scripts/export_release_contract.py",
+        "uv.lock"
+      ]
+    },
+    {
+      "repository": "hyperme-sh/hypermesh",
+      "revision": "3ec4bc1004538fa7b0be3b698d0ecf818c075649",
+      "branch": "main",
+      "archived": false,
+      "paths": [
+        "package.json"
+      ]
+    },
+    {
+      "repository": "hyperme-sh/hypermesh-bench",
+      "revision": "e1f4f5cead7f87786b0c92103cac9e12a17c22b5",
+      "branch": "main",
+      "archived": false,
+      "paths": []
+    },
+    {
+      "repository": "hyperme-sh/hypermesh-cli",
+      "revision": "a0aebbf4e1b759eab5ff1960ff4aa524e1fd1481",
+      "branch": "main",
+      "archived": false,
+      "paths": [
+        "go.mod"
+      ]
+    },
+    {
+      "repository": "hyperme-sh/hypermesh-conductor",
+      "revision": "d1aa3fb10d1ea74fd7a0b1d0b7e84d6367bcd6fc",
+      "branch": "main",
+      "archived": false,
+      "paths": [
+        "go.mod"
+      ]
+    },
+    {
+      "repository": "hyperme-sh/hypermesh-contract-authority",
+      "revision": "fbf0a4f439e283b257dfde19d90cf33a640bbe7a",
+      "branch": "main",
+      "archived": false,
+      "paths": [
+        "pyproject.toml",
+        "uv.lock"
+      ]
+    },
+    {
+      "repository": "hyperme-sh/hypermesh-docs",
+      "revision": "1b282971edc3832dea01670e93c102fad3b7d879",
+      "branch": "main",
+      "archived": false,
+      "paths": [
+        "evidence/phase-c/2026-11-02/api-package.json",
+        "evidence/phase-c/2026-11-02/api-transition-archive/core/lib/controlplane-api/pyproject.toml",
+        "evidence/phase-c/2026-11-02/auth-package.json",
+        "evidence/phase-c/2026-11-02/auth-transition-archive/core/auth-service/pyproject.toml",
+        "evidence/phase-c/2026-11-02/core-package.json",
+        "evidence/phase-c/2026-11-02/core-transition-archive/core/lib/controlplane-core/pyproject.toml",
+        "evidence/phase-c/2026-11-02/db-transition-archive/core/lib/controlplane-db/pyproject.toml",
+        "evidence/phase-c/2026-11-02/orchestrator-transition-archive/products/hypermesh-orchestrator/pyproject.toml",
+        "evidence/phase-c/2026-11-02/tenancy-package.json",
+        "evidence/phase-c/2026-11-02/tenancy-transition-archive/core/lib/controlplane-tenancy/pyproject.toml",
+        "evidence/phase-c/2026-11-02/ticket-package.json",
+        "evidence/phase-c/2026-11-02/ticket-transition-archive/pyproject.toml",
+        "evidence/phase-c/2026-11-02/user-contract-package.json",
+        "evidence/phase-c/2026-11-03/acl-package.json",
+        "evidence/phase-c/2026-11-03/ai-package.json",
+        "evidence/phase-c/2026-11-03/aiuditor-package.json",
+        "evidence/phase-c/2026-11-03/aiuditor-transition-archive/original-pyproject.toml",
+        "evidence/phase-c/2026-11-03/api-keys-package.json",
+        "evidence/phase-c/2026-11-03/billing-package.json",
+        "evidence/phase-c/2026-11-03/billing-transition-archive/core/lib/controlplane-billing/pyproject.toml",
+        "evidence/phase-c/2026-11-03/edge-package.json",
+        "evidence/phase-c/2026-11-03/edge-transition-archive/original-pyproject.toml",
+        "evidence/phase-c/2026-11-03/gateway-package.json",
+        "evidence/phase-c/2026-11-03/gateway-transition-archive/original-pyproject.toml",
+        "evidence/phase-c/2026-11-03/marketplace-package.json",
+        "evidence/phase-c/2026-11-03/oracles-package.json",
+        "evidence/phase-c/2026-11-03/oracles-transition-archive/original-pyproject.toml",
+        "evidence/phase-c/2026-11-03/payment-package.json",
+        "evidence/phase-c/2026-11-03/payment-transition-archive/pyproject.toml",
+        "evidence/phase-c/2026-11-03/payments-access-package.json",
+        "evidence/phase-c/2026-11-03/payments-access-transition-archive/original-pyproject.toml",
+        "evidence/phase-c/2026-11-03/portal-package.json",
+        "evidence/phase-c/2026-11-03/portal-transition-archive/frontend-package.json",
+        "evidence/phase-c/2026-11-03/sdk-package.json",
+        "evidence/phase-c/2026-11-03/template-package.json",
+        "evidence/phase-c/2026-11-03/template-transition-archive/original-pyproject.toml",
+        "evidence/phase-c/2026-11-03/tests-package.json",
+        "evidence/phase-c/2026-11-03/tests-transition-archive/core-e2e-tests-pyproject.toml",
+        "evidence/phase-c/2026-11-03/tests-transition-archive/core-tests-pyproject.toml"
+      ]
+    },
+    {
+      "repository": "hyperme-sh/hypermesh-gateway",
+      "revision": "f1d626bde7ded506324b2edaf8b0f99b8b573fc6",
+      "branch": "main",
+      "archived": false,
+      "paths": [
+        "pyproject.toml",
+        "release-policy.json",
+        "scripts/export_release_contract.py",
+        "scripts/verify_preparation_environment.py",
+        "uv.lock"
+      ]
+    },
+    {
+      "repository": "hyperme-sh/hypermesh-host",
+      "revision": "039d9baf88d8c351ce11499e2d52467e336c517b",
+      "branch": "main",
+      "archived": false,
+      "paths": [
+        "go.mod"
+      ]
+    },
+    {
+      "repository": "hyperme-sh/hypermesh-orchestrator",
+      "revision": "47669f3a43a89343f920b572b4b979d0730a810e",
+      "branch": "main",
+      "archived": false,
+      "paths": [
+        "pyproject.toml",
+        "release-policy.json",
+        "scripts/export_release_contract.py",
+        "uv.lock"
+      ]
+    },
+    {
+      "repository": "hyperme-sh/hypermesh-plane",
+      "revision": "dc1e09c2f432a4206e10c96222224ad57dcf180e",
+      "branch": "main",
+      "archived": false,
+      "paths": [
+        "products/hypermesh/contracts/pyproject.toml",
+        "products/hypermesh/contracts/uv.lock",
+        "products/hypermesh/pyproject.toml",
+        "pyproject.toml",
+        "release-policy.json",
+        "scripts/verify_preparation_environment.py",
+        "uv.lock"
+      ]
+    },
+    {
+      "repository": "hyperme-sh/hypermesh-pricing",
+      "revision": "368040d6098b0d68f8acba1476a653c561bf05f6",
+      "branch": "main",
+      "archived": false,
+      "paths": [
+        "pyproject.toml"
+      ]
+    },
+    {
+      "repository": "hyperme-sh/hypermesh-ticket",
+      "revision": "cba22fe364d3b75d4a54b9137a3920a23133b09a",
+      "branch": "main",
+      "archived": false,
+      "paths": [
+        "pyproject.toml",
+        "release-policy.json",
+        "scripts/export_release_contract.py",
+        "uv.lock"
+      ]
+    },
+    {
+      "repository": "hyperme-sh/hypermesh-visor",
+      "revision": "ec9c4f68fa5185884381e6660c8c2cb957f3b49e",
+      "branch": "main",
+      "archived": false,
+      "paths": [
+        "Cargo.toml",
+        "ci/mcp-discovery/Cargo.toml",
+        "companion/Cargo.toml",
+        "session/Cargo.toml",
+        "third_party/hypermesh-cli/go.mod"
+      ]
+    },
+    {
+      "repository": "hyperme-sh/hypermesh-vscode",
+      "revision": "125cef74bc2810d64860348a47c4f26d0dbffe14",
+      "branch": "main",
+      "archived": false,
+      "paths": [
+        "package.json"
+      ]
+    },
+    {
+      "repository": "hyperme-sh/market-sim",
+      "revision": "7a2b695337fad81f92e372092c6923a25b24384c",
+      "branch": "main",
+      "archived": false,
+      "paths": [
+        "pyproject.toml"
+      ]
+    },
+    {
+      "repository": "hyperme-sh/marketplace-service",
+      "revision": "5b88971473d46d306efec98398e42335d4a51b8e",
+      "branch": "main",
+      "archived": false,
+      "paths": [
+        "core/marketplace-service/pyproject.toml",
+        "pyproject.toml",
+        "release-policy.json",
+        "scripts/export_release_contract.py",
+        "scripts/verify_preparation_environment.py",
+        "uv.lock"
+      ]
+    },
+    {
+      "repository": "hyperme-sh/oracles",
+      "revision": "7715e813bd8542ed31875830b4398fbad22327da",
+      "branch": "main",
+      "archived": false,
+      "paths": [
+        "pyproject.toml",
+        "release-policy.json",
+        "scripts/export_release_contract.py",
+        "scripts/verify_preparation_environment.py",
+        "uv.lock"
+      ]
+    },
+    {
+      "repository": "hyperme-sh/payment-service",
+      "revision": "d61a1eb7cd8aef824c7f31de13f5764fa4e7fdf7",
+      "branch": "main",
+      "archived": false,
+      "paths": [
+        "operations/legacy-payment-bridge/pyproject.toml",
+        "operations/legacy-payment-bridge/uv.lock",
+        "pyproject.toml",
+        "release-policy.json",
+        "scripts/export_release_contract.py",
+        "scripts/owner-login/package.json",
+        "scripts/verify_preparation_environment.py",
+        "uv.lock"
+      ]
+    },
+    {
+      "repository": "hyperme-sh/payments-access",
+      "revision": "0cb6ea3654928a11b89bb51e17289cdfc21946e2",
+      "branch": "main",
+      "archived": false,
+      "paths": [
+        "pyproject.toml",
+        "release-policy.json",
+        "scripts/export_release_contract.py",
+        "scripts/verify_preparation_environment.py",
+        "uv.lock"
+      ]
+    },
+    {
+      "repository": "hyperme-sh/product-template",
+      "revision": "50f8f5ee42c41ae4ed5f74bd73b8caced0237e6c",
+      "branch": "main",
+      "archived": false,
+      "paths": [
+        "pyproject.toml",
+        "release-policy.json",
+        "scripts/export_release_contract.py",
+        "scripts/verify_preparation_environment.py",
+        "uv.lock"
+      ]
+    },
+    {
+      "repository": "hyperme-sh/spanopticon",
+      "revision": "279de1c189b0b3278da92d2aafdacd6cb11daf71",
+      "branch": "main",
+      "archived": false,
+      "paths": []
+    },
+    {
+      "repository": "hyperme-sh/ssdmodeloptimization",
+      "revision": "f1261b881943a27ed70d75776b89248fc1f3acf5",
+      "branch": "main",
+      "archived": false,
+      "paths": []
+    },
+    {
+      "repository": "hyperme-sh/turn",
+      "revision": "899a28581e611a71886e18067cd0e1c86c4789e4",
+      "branch": "main",
+      "archived": false,
+      "paths": [
+        "pyproject.toml",
+        "release-policy.json",
+        "scripts/export_release_contract.py",
+        "scripts/verify_preparation_environment.py",
+        "tooling/pyproject.toml",
+        "tooling/uv.lock",
+        "uv.lock"
+      ]
+    },
+    {
+      "repository": "hyperme-sh/user-service",
+      "revision": "17947e7b230fe785309122d5396f45cfa39aec8f",
+      "branch": "main",
+      "archived": false,
+      "paths": [
+        "core/user-service/contracts/pyproject.toml",
+        "core/user-service/contracts/uv.lock",
+        "core/user-service/pyproject.toml",
+        "core/user-service/scripts/verify_preparation_environment.py",
+        "core/user-service/uv.lock",
+        "release-policy.json"
+      ]
+    },
+    {
+      "repository": "hyperme-sh/verification",
+      "revision": "eee22553c44f3cce389539ae3ea18da741684c15",
+      "branch": "main",
+      "archived": false,
+      "paths": [
+        "pyproject.toml",
+        "uv.lock"
+      ]
+    }
+  ]
+}

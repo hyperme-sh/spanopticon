@@ -14,9 +14,12 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     for name in ('candidate', 'provenance', 'source-root'):
         parser.add_argument('--' + name, type=Path, required=True)
+    parser.add_argument('--baseline-root', type=Path)
+    parser.add_argument('--repository')
     args = parser.parse_args()
     try:
-        result = prepare(args.candidate, args.provenance, args.source_root)
+        result = prepare(args.candidate, args.provenance, args.source_root,
+                         baseline_root=args.baseline_root, repository=args.repository)
     except (ValueError, TypeError, KeyError, OSError, subprocess.CalledProcessError):
         parser.exit(1, 'Preparation rejected: invalid source, lock, contract or artifact inputs\n')
     print(json.dumps(result, sort_keys=True))
