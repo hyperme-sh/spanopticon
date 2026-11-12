@@ -136,6 +136,8 @@ class StartupConsumerContracts(unittest.TestCase):
 
     def test_targets_and_schedule_fail_closed(self):
         c=context();target.validate_targets(c.targets,c.config)
+        uniform=copy.deepcopy(c.config);uniform['binding']['platform_admin']={'spanopticon':True,'hyperme.sh':True}
+        with self.assertRaises(ValueError):target.validate_targets(c.targets,uniform)
         for changed in ({'foreign_tenant_id':c.tenant},{'organization_id':'00000000-0000-4000-8000-000000008888'},{'foreign_catalog_id':'declared-model'}):
             with self.assertRaises(ValueError):target.validate_targets({**c.targets,**changed},c.config)
         with self.assertRaises(ValueError):target.require_schedule({})

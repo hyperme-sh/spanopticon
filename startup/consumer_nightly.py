@@ -28,6 +28,8 @@ def require_schedule(env):
 
 
 def validate_targets(value,config):
+    if set(config['binding']['platform_admin'].values())!={True,False}:
+        raise ValueError('Grant boundary fixture requires enabled and disabled platform scopes')
     fields={'organization_id','foreign_tenant_id','key_id','key_prefix','listing_id','lease_id','catalog_id','foreign_catalog_id'}
     if not isinstance(value,dict) or set(value)!=fields:raise ValueError('Declared consumer targets required')
     for name in ('organization_id','foreign_tenant_id','key_id','listing_id','lease_id'):

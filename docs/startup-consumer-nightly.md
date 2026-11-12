@@ -9,7 +9,9 @@ responses; they do not contact services.
 The Infra-owned private fixture extends the existing owner fixture with four
 HTTPS service roots (`marketplace`, `keys`, `plane`, `gateway`), one declared
 organization, a distinct negative tenant, existing listing/key/lease IDs, the key
-prefix, its active catalog ID and a foreign catalog ID. A separate existing API
+prefix, its active catalog ID and a foreign catalog ID. The declared mapping must
+include both an enabled and a disabled platform-admin scope, so cross-grant
+leakage cannot pass merely because every expected grant is enabled. A separate existing API
 key and a verified second broker login with the same email are required. Infra
 stages the actual private credentials only after source acquisition, and removes
 only its run-owned files. There is no resource creation, lease purchase, provider
