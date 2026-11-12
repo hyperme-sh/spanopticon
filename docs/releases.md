@@ -210,3 +210,27 @@ After successful publication, record actual immutable stable provenance and
 select its baseline commit. Subsequent releases use normal compatibility
 admission. An older publisher rejects the new initial-admission job, so deploy
 the publisher and owning workflow updates together before making a first tag.
+
+### Offline preparation input checks
+
+`python3 scripts/prepare_release.py --candidate PATH/release.json
+--provenance PATH/preparation.json --source-root CHECKOUT` verifies local inputs
+without contacting a registry or requiring a previous stable release. It does
+not call initial-publication admission or change release history. Existing
+`check_release.py` and component admission retain their baseline requirements.
+
+The provenance JSON has `schema_version: 1`, a full `source_revision`, `locks`
+(a nonempty mapping of checkout-relative lock paths to SHA-256 digests), and
+`artifacts` (candidate-relative file paths keyed by every component name).
+The source checkout must match the revision and have no tracked changes. Every
+lock must be tracked and match its recorded digest. Candidate contracts and
+local artifact bytes must match the candidate manifest. Component membership
+comes from the actual candidate, with no historical fleet count.
+
+This checks supplied inputs only. It does not establish that artifacts were
+freshly built from that checkout, that every dependency has been enumerated,
+that installer metadata is compatible, or that consumers passed. The owner
+build and qualification harness must establish those properties separately.
+The machine-readable result explicitly reports `publication_authorized: false`.
+A legitimate prior stable release still requires normal compatibility admission;
+a successful preparation check cannot replace that step or authorize promotion.
