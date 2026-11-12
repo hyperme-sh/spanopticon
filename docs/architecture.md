@@ -22,3 +22,9 @@ Use explicit adapters for product-specific behavior. A reusable plane template
 must not embed customer records, private environment inventories or product
 business rules. A successful package test is separate from integration,
 deployment and operational acceptance.
+
+## s3r.ch external interfaces
+
+Spanopticon supplies s3r.ch's out-of-network service interfaces through the edge
+and the appropriate backend owners. See [s3r.ch interfaces](s3rch-interfaces.md)
+for the opaque contact-lane contract and ownership boundaries.
