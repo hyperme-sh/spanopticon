@@ -5,7 +5,7 @@ from pathlib import Path
 import sys
 import tarfile
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'scripts'))
-from new_plane import manifests
+from new_plane import artifact_manifests as manifests
 from deployment import bundle as b
 from test_deployment_bundle import BundleFixture,encode
 

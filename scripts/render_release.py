@@ -9,14 +9,22 @@ import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from release.policy import PolicyError, contract_path, require, validate
-from new_plane import manifests
+from new_plane import artifact_manifests, manifests
+import service_channels
 from assurance import load, settings
 
 
-def render(previous, candidate, output, assurance=None):
+def render(previous, candidate, output, assurance=None, *, services=None, repositories=None):
     settings(assurance)
     bundle = validate(previous, candidate)
     root = Path(candidate).resolve().parent
+    runtime = None
+    if services is not None or repositories is not None:
+        runtime = service_channels.validate({service_channels.ASSET: services}, repositories)
+        expected = {name for name, component in bundle['components'].items()
+                    if component['artifact']['kind'] == 'container'}
+        require(set(runtime) == expected, 'Runtime service set differs from container components')
+        repositories = service_channels.document(repositories)
     prepared = {}
     exported = copy.deepcopy(bundle)
     for name, component in bundle['components'].items():
@@ -27,7 +35,9 @@ def render(previous, candidate, output, assurance=None):
         prepared[relative] = raw
         exported['components'][name]['contract'] = relative
         if component['artifact']['kind'] == 'container':
-            for filename, document in manifests(name, component['artifact']['uri'], assurance).items():
+            documents = (artifact_manifests(name, component['artifact']['uri'], assurance) if runtime is None
+                         else manifests(name, runtime[name], assurance, repository=repositories[name]))
+            for filename, document in documents.items():
                 if filename == 'compose.yaml':
                     document['services'][name]['labels'] = {'org.opencontainers.image.version': component['version']}
                 else:
@@ -35,6 +45,8 @@ def render(previous, candidate, output, assurance=None):
                         item.setdefault('metadata', {}).setdefault('annotations', {})['spanopticon.io/version'] = component['version']
                 prepared[f'{name}/{filename}'] = (json.dumps(document, indent=2) + '\n').encode()
     require(any(path.endswith('/compose.yaml') for path in prepared), 'No container components to render')
+    if services is not None:
+        prepared[service_channels.ASSET] = services
     output = Path(output)
     output.mkdir()  # Refuse files, directories and symlinks, including empty ones.
     for relative, content in prepared.items():
@@ -55,9 +67,20 @@ def main():
     parser.add_argument('--candidate', type=Path, required=True)
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument("--assurance-config", type=Path, required=True)
+    parser.add_argument('--services', type=Path)
+    parser.add_argument('--repositories', type=Path)
+    parser.add_argument('--artifact-qualification-only', action='store_true',
+                        help='Historical isolated bundle qualification; not running service configuration')
     args = parser.parse_args()
+    if args.artifact_qualification_only:
+        if args.services or args.repositories:
+            parser.error('Choose runtime service configuration or isolated artifact qualification')
+    elif not (args.services and args.repositories):
+        parser.error('Runtime rendering requires --services and --repositories')
     try:
-        print(render(args.previous, args.candidate, args.output, load(args.assurance_config)))
+        print(render(args.previous, args.candidate, args.output, load(args.assurance_config),
+                     services=args.services.read_bytes() if args.services else None,
+                     repositories=args.repositories.read_text() if args.repositories else None))
     except (PolicyError, OSError, ValueError, TypeError, KeyError) as error:
         parser.exit(1, f'Render rejected: {error}\n')
 

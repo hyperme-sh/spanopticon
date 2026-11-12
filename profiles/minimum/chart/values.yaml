@@ -1,3 +1,5 @@
+imagePullPolicy: Always
+imageRepository: ""
 image: ""
 tenant: ""
 existingSecret: ""

@@ -8,7 +8,7 @@ spec = importlib.util.spec_from_file_location("new_plane", Path(__file__).resolv
 generator = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(generator)
 ASSURANCE = {"mode": "kyc", "providers": {"kyc": {"url": "https://payment.example.invalid", "credential_secret": "kyc-client"}}}
-IMAGE = "registry.example.org/team/plane@sha256:" + "a" * 64
+IMAGE = "ghcr.io/hyperme-sh/spanopticon/runtime:test"
 
 
 class GeneratorTests(unittest.TestCase):
@@ -21,7 +21,7 @@ class GeneratorTests(unittest.TestCase):
             self.assertEqual(compose["services"]["example"]["image"], IMAGE)
             self.assertEqual(deployment["spec"]["template"]["spec"]["containers"][0]["image"], IMAGE)
 
-    def test_refuses_mutable_images_and_invalid_names_before_writing(self):
+    def test_refuses_unapproved_images_and_invalid_names_before_writing(self):
         for name, image in [("1plane", IMAGE), ("../escape", IMAGE), ("Example", IMAGE), ("a" * 64, IMAGE),
                             ("ok", "example:latest"), ("ok", IMAGE + "\n")]:
             with self.subTest(name=name, image=image), tempfile.TemporaryDirectory() as temp:
