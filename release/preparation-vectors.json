@@ -1,0 +1,62 @@
+[
+  {
+    "case": "first-build",
+    "accepted": true
+  },
+  {
+    "case": "stable-baseline",
+    "accepted": true
+  },
+  {
+    "case": "test-baseline",
+    "accepted": false
+  },
+  {
+    "case": "tampered-artifact",
+    "accepted": false
+  },
+  {
+    "case": "changed-installer",
+    "accepted": false
+  },
+  {
+    "case": "verified-direct-url",
+    "accepted": true
+  },
+  {
+    "case": "wrong-direct-url",
+    "accepted": false
+  },
+  {
+    "case": "missing-source",
+    "accepted": false
+  },
+  {
+    "case": "missing-lock",
+    "accepted": false
+  },
+  {
+    "case": "renamed-wheel",
+    "accepted": false
+  },
+  {
+    "case": "new-component",
+    "accepted": true
+  },
+  {
+    "case": "optional-python",
+    "accepted": true
+  },
+  {
+    "case": "changed-wheel-tags",
+    "accepted": false
+  },
+  {
+    "case": "wheel-to-sdist",
+    "accepted": false
+  },
+  {
+    "case": "major-installer-change",
+    "accepted": true
+  }
+]
