@@ -8,17 +8,31 @@ import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from assurance import load, settings
+from service_channels import reference
 
 NAME = re.compile(r"[a-z](?:[a-z0-9-]{0,61}[a-z0-9])?\Z")
 IMAGE = re.compile(r"[a-z0-9][a-z0-9._:/-]*@sha256:[0-9a-f]{64}\Z")
 
 
-def manifests(name, image, assurance=None):
+def manifests(name, image, assurance=None, *, repository="ghcr.io/hyperme-sh/spanopticon/runtime"):
+    reference(image, repository)
+    result = _manifests(name, image, assurance)
+    result["compose.yaml"]["services"][name]["pull_policy"] = "always"
+    result["kubernetes.json"]["items"][1]["spec"]["template"]["spec"]["containers"][0]["imagePullPolicy"] = "Always"
+    return result
+
+
+def artifact_manifests(name, image, assurance=None):
+    """Historical bundle qualification only; not the service configuration CLI."""
+    if not isinstance(image, str) or not IMAGE.fullmatch(image):
+        raise ValueError("artifact image requires a lowercase SHA-256 digest")
+    return _manifests(name, image, assurance)
+
+
+def _manifests(name, image, assurance=None):
     environment, secrets = settings(assurance)
     if not NAME.fullmatch(name):
         raise ValueError("name must be a lowercase DNS label of 1 to 63 characters starting with a letter")
-    if not IMAGE.fullmatch(image):
-        raise ValueError("image must be an image reference with a lowercase SHA-256 digest")
     labels = {"app.kubernetes.io/name": name}
     compose = {"name": name, "services": {name: {
         "environment": environment, "secrets": list(secrets),
@@ -73,8 +87,8 @@ def manifests(name, image, assurance=None):
             "kubernetes.json": {"apiVersion": "v1", "kind": "List", "items": items}}
 
 
-def generate(name, image, output, assurance=None):
-    data = manifests(name, image, assurance)
+def generate(name, image, output, assurance=None, *, repository="ghcr.io/hyperme-sh/spanopticon/runtime"):
+    data = manifests(name, image, assurance, repository=repository)
     output = Path(output).absolute()
     # mkdir is an exclusive reservation: refuse directories, files and symlinks.
     # Do not replace another operator's path, even an empty directory.
@@ -91,11 +105,12 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("name")
     parser.add_argument("--image", required=True)
+    parser.add_argument("--repository", required=True, help="Approved registry/repository from deployment configuration")
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--assurance-config", type=Path, required=True)
     args = parser.parse_args()
     try:
-        result = generate(args.name, args.image, args.output, load(args.assurance_config))
+        result = generate(args.name, args.image, args.output, load(args.assurance_config), repository=args.repository)
     except (ValueError, OSError) as error:
         parser.exit(2, f"error: {error}\n")
     print(result)

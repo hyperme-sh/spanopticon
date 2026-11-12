@@ -1,7 +1,19 @@
 {{- $image := required "image is required" .Values.image -}}
-{{- if not (regexMatch "^[^@[:space:]]+@sha256:[a-f0-9]{64}$" $image) -}}
-{{- fail "image must be a digest-pinned reference ending in @sha256:<64 lowercase hex digits>" -}}
+{{- $repository := required "imageRepository is required" .Values.imageRepository -}}
+{{- $repoPattern := "^[a-z0-9]+([.-][a-z0-9]+)*(:[0-9]{1,5})?/[a-z0-9]+([._-][a-z0-9]+)*(/[a-z0-9]+([._-][a-z0-9]+)*)*$" -}}
+{{- if not (regexMatch $repoPattern $repository) -}}
+{{- fail "invalid approved registry/repository" -}}
 {{- end -}}
+{{- $registry := first (splitList "/" $repository) -}}
+{{- if contains ":" $registry -}}
+{{- $port := atoi (last (splitList ":" $registry)) -}}
+{{- if or (lt $port 1) (gt $port 65535) -}}{{- fail "invalid registry port" -}}{{- end -}}
+{{- end -}}
+{{- $prefix := printf "%s:" $repository -}}
+{{- if or (not (hasPrefix $prefix $image)) (not (regexMatch "^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$" (trimPrefix $prefix $image))) -}}
+{{- fail "image must use the approved repository and an explicit tag" -}}
+{{- end -}}
+{{- if not (has .Values.imagePullPolicy (list "Always" "Never")) -}}{{- fail "imagePullPolicy must be Always or Never for imported fixtures" -}}{{- end -}}
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
@@ -33,7 +45,7 @@ spec:
       containers:
         - name: {{ $role }}
           image: {{ $image | quote }}
-          imagePullPolicy: IfNotPresent
+          imagePullPolicy: {{ $.Values.imagePullPolicy }}
           command:
             - uvicorn
             {{- if eq $role "api" }}

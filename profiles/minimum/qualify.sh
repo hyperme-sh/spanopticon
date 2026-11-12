@@ -65,20 +65,15 @@ case $engine in
     docker build -f "$profile/Dockerfile" -t "$image" .
     kind create cluster --name "$project" --image kindest/node:v1.37.0@sha256:a1ed56cfb0e7b93589bdf97c8cd566405a265939e3620fc4f5de89adff580ae5 --wait 120s
     kind load docker-image --name "$project" "$image"
-    # Use the imported manifest digest (the Docker image ID is a config digest).
     repository=docker.io/library/minimum-reference
-    node="$project-control-plane"
-    digest=$(docker exec "$node" ctr -n k8s.io images ls | awk -v ref="docker.io/library/$image" '$1 == ref {print $3}')
-    [[ $digest =~ ^sha256:[0-9a-f]{64}$ ]]
-    pinned="$repository@$digest"
-    docker exec "$node" ctr -n k8s.io images tag --force "docker.io/library/$image" "$pinned"
-    if helm template minimum "$profile/chart" --set-string image="$image" --set tenant=test --set existingSecret=test > "$root/render.log" 2>&1; then
-      echo 'Chart accepted a mutable image tag' >&2
+    image="$repository:$(git rev-parse HEAD)"
+    if helm template minimum "$profile/chart" --set-string image="evil.invalid/other:test" --set-string imageRepository="$repository" --set tenant=test --set existingSecret=test > "$root/render.log" 2>&1; then
+      echo 'Chart accepted an unapproved repository' >&2
       exit 1
     fi
-    grep -q 'image must be a digest-pinned reference' "$root/render.log"
+    grep -q 'image must use the approved repository' "$root/render.log"
     kubectl create secret generic minimum-config "${secret_files[@]}"
-    helm install minimum "$profile/chart" --set-string image="$pinned" "${helm_identity[@]}" --set existingSecret=minimum-config --set-string tenant="$tenant" --wait --timeout 3m
+    helm install minimum "$profile/chart" --set-string image="$image" --set-string imageRepository="$repository" --set imagePullPolicy=Never "${helm_identity[@]}" --set existingSecret=minimum-config --set-string tenant="$tenant" --wait --timeout 3m
     for role in "${roles[@]}"; do
       kubectl port-forward "service/minimum-$role" :8000 > "$root/$role.log" 2>&1 &
       pids+=("$!")

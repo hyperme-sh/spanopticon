@@ -1,8 +1,8 @@
 # Generate and qualify a deployment
 
-Use `scripts/new_plane.py NAME --image IMAGE@sha256:DIGEST --assurance-config CONFIG.json --output DIRECTORY`.
+Use `scripts/new_plane.py NAME --repository REGISTRY/REPOSITORY --image REGISTRY/REPOSITORY:TAG --assurance-config CONFIG.json --output DIRECTORY`.
 Names are lowercase DNS labels up to 63 characters and must start with a letter,
-so Service names work without optional cluster feature gates. Image tags alone are refused.
+so Service names work without optional cluster feature gates. Images require an explicit tag in the configured registry/repository. Runtime digests are refused.
 The output directory must not exist; existing deployments are never overwritten.
 Both output files use JSON, which Docker Compose and Kubernetes accept directly.
 
@@ -66,3 +66,27 @@ images implementing that contract, and use credentials scoped to their owner
 interfaces. This is not a credential distribution mechanism for arbitrary
 microservices. See [runtime contract](runtime-contract.md#deployment-assurance)
 for availability, evidence, and independent Stripe payment requirements.
+
+## Independent service channels
+
+The registry/repository is trusted deployment configuration, not derived from
+the supplied image. The shared contract is vendored from `.github` commit
+`a1963cff270b3336348061ae6efe638bebdea876`; source hashes and positive/negative
+vectors accompany it. The CLI requires `--repository` and keeps the tag unchanged.
+Compose pulls on each start; Kubernetes pulls on each pod start. Existing pods
+need the deployment owner's normal channel reconciliation to advance.
+
+`render_release.py` accepts `--services service-channels.json` and
+`--repositories approved-repositories.json`. The service map uses schema 1 and a
+`services` object; the repository file maps each service name to its allowed
+registry/repository. Every container component must be present. Compatible peers
+may use different patch tags. Artifact identity stays in the independently
+validated release.json and does not replace the running service reference.
+
+The explicit `--artifact-qualification-only` path preserves historical isolated
+bundle qualification under #20. It is not the running TEST configuration path.
+Production still requires its existing explicit promotion; supplying a tag here
+does not authorize it.
+
+Runtime and minimum-profile checks are registered in Infra's `spanopticon-runtime`
+nightly adapter (infra #922). PRs run unit/contract and Helm rendering checks only.

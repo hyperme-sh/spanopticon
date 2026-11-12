@@ -137,6 +137,28 @@ class ReleasePolicyTest(unittest.TestCase):
         self.rewrite(path, lambda d: d['components']['api']['artifact'].update(uri='example:latest'))
         with self.assertRaisesRegex(policy.PolicyError, 'digest/URI'): policy.load_bundle(path)
 
+    def test_runtime_channels_are_separate_from_verified_artifact_identity(self):
+        import sys
+        sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'scripts'))
+        from render_release import render
+        from test_generator import ASSURANCE
+        old = self.bundle('old')
+        new = self.bundle('new', {'api': '1.4.1', 'worker': '1.4.9'}, digest='b' * 64)
+        repositories = {name: 'registry.example.org/' + name for name in ['api', 'worker']}
+        services = json.dumps({'schema': 1, 'services': {
+            'api': repositories['api'] + ':test', 'worker': repositories['worker'] + ':1.4.9'}}).encode()
+        output = render(old, new, self.root / 'channels', ASSURANCE,
+                        services=services, repositories=json.dumps(repositories))
+        self.assertEqual(json.loads((output/'api/compose.yaml').read_text())['services']['api']['image'],
+                         repositories['api'] + ':test')
+        record, _ = policy.load_bundle(output/'release.json')
+        self.assertEqual(record['components']['api']['artifact']['sha256'], 'b'*64)
+        self.assertEqual((output/'service-channels.json').read_bytes(), services)
+        with self.assertRaises(ValueError):
+            render(old, new, self.root/'missing', ASSURANCE, services=services,
+                   repositories=json.dumps({'api': repositories['api']}))
+        self.assertFalse((self.root/'missing').exists())
+
     def test_render_uses_validated_digests_and_refuses_incompatible_bundle(self):
         import sys
         sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'scripts'))
