@@ -54,5 +54,9 @@
   {
     "case": "wheel-to-sdist",
     "accepted": false
+  },
+  {
+    "case": "major-installer-change",
+    "accepted": true
   }
 ]

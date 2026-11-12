@@ -52,8 +52,8 @@ def exercise(case):
                                       'sha256': hashlib.sha256(artifact.read_bytes()).hexdigest()}}
             write_json(folder / 'release.json', {'schema_version': 1, 'line': '.'.join(version.split('.')[:2]), 'components': {'component': component}})
             return artifact, component
-        artifact, component = bundle(root / 'candidate', '1.1.0' if case == 'new-component' else '1.0.1',
-            None if case == 'optional-python' else '>=3.12' if case in {'changed-installer', 'renamed-wheel'} else '>=3.11',
+        artifact, component = bundle(root / 'candidate', '2.0.0' if case == 'major-installer-change' else '1.1.0' if case == 'new-component' else '1.0.1',
+            None if case == 'optional-python' else '>=3.12' if case in {'changed-installer', 'renamed-wheel', 'major-installer-change'} else '>=3.11',
             'cp312-cp312-manylinux_2_17_x86_64' if case == 'changed-wheel-tags' else 'py3-none-any')
         record = {'schema_version': 1, 'source_revision': revision,
                   'locks': {'requirements.lock': hashlib.sha256((source / 'requirements.lock').read_bytes()).hexdigest()},
@@ -88,7 +88,7 @@ def exercise(case):
         provenance = root / 'candidate/preparation.json' 
         write_json(provenance, record)
         options = {}
-        if case in {'stable-baseline', 'test-baseline', 'changed-installer', 'renamed-wheel', 'new-component', 'changed-wheel-tags', 'wheel-to-sdist'}:
+        if case in {'stable-baseline', 'test-baseline', 'changed-installer', 'renamed-wheel', 'new-component', 'changed-wheel-tags', 'wheel-to-sdist', 'major-installer-change'}:
             baseline = root / 'baseline'
             old_artifact, old = bundle(baseline / 'releases/accepted', '1.0.0')
             tag = 'test-' + revision if case == 'test-baseline' else 'v1.0.0'

@@ -70,7 +70,10 @@ def prepare(candidate, provenance, source_root, *, baseline_root=None, repositor
         previous = Path(baseline_root) / 'releases/accepted/release.json'
         old, _ = load_bundle(previous)
         validate(previous, candidate)
+        same_major = bundle['line'].split('.')[0] == old['line'].split('.')[0]
         for name in set(bundle['components']) & set(old['components']):
+            if not same_major:
+                continue
             previous_component = old['components'][name]
             prior_path = previous_component.get('installer_artifact')
             prior_uri = previous_component['artifact']['uri']
