@@ -15,7 +15,9 @@ CASES=('interrupted-boot-retry','repeated-boot','bound-sea-identity','declared-o
 
 def require_schedule(env):
     if not (env.get('GITHUB_ACTIONS')=='true' and env.get('GITHUB_EVENT_NAME')=='schedule' and
-            env.get('GITHUB_REPOSITORY')=='FyberLabs/infra' and env.get('GITHUB_REF')=='refs/heads/main'):
+            env.get('GITHUB_REPOSITORY')=='hyperme-sh/spanopticon' and env.get('GITHUB_REF')=='refs/heads/main' and
+            env.get('NIGHTLY_SUITE')=='startup-identity' and
+            env.get('GITHUB_WORKFLOW_REF')=='FyberLabs/infra/.github/workflows/nightly-integration.yml@refs/heads/main'):
         raise ValueError('Scheduled Infra batch required')
 
 
@@ -96,7 +98,7 @@ def main():
         token=private_file(fixture['broker_token_file']).decode().strip()
         for case in qualify(config,env,fixture['state_dir'],token,fixture['foreign_organization_id']):completed.append(case)
         status='passed'
-    except (ValueError,OSError,KeyError,AssertionError):
+    except Exception:
         pass
     args.output.mkdir(parents=True,exist_ok=True)
     suite=ET.Element('testsuite',name='startup-identity',tests=str(len(CASES)),failures=str(len(CASES)-len(completed)))
