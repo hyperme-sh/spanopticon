@@ -42,5 +42,13 @@
   {
     "case": "new-component",
     "accepted": true
+  },
+  {
+    "case": "optional-python",
+    "accepted": true
+  },
+  {
+    "case": "changed-wheel-tags",
+    "accepted": false
   }
 ]

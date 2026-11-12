@@ -54,7 +54,7 @@ def prepare(candidate, provenance, source_root, *, baseline_root=None, repositor
         require(hashlib.sha256(path.read_bytes()).hexdigest() == component['artifact']['sha256'],
                 f'{name}: preparation artifact digest mismatch')
         if is_wheel(path, component['artifact']['uri']):
-            installers[name] = snapshot(path)
+            installers[name] = snapshot(path, component['artifact']['uri'])
             require(installers[name]['version'] == component['version'], 'Wheel version differs from candidate')
             extras = record.get('extras', {}).get(name, [])
             require(isinstance(extras, list) and all(isinstance(x, str) for x in extras) and
@@ -75,7 +75,7 @@ def prepare(candidate, provenance, source_root, *, baseline_root=None, repositor
             prior = contract_path(previous.parent, old['components'][name].get('installer_artifact'))
             require(hashlib.sha256(prior.read_bytes()).hexdigest() == old['components'][name]['artifact']['sha256'],
                     'Stable installer artifact digest mismatch')
-            compatible(snapshot(prior), installer)
+            compatible(snapshot(prior, old['components'][name]['artifact']['uri']), installer)
     return {'schema_version': 1, 'source_revision': revision,
             'components': sorted(bundle['components']), 'locks': locks, 'installers': installers,
             'baseline': 'verified-stable' if baseline_root is not None else 'none',

@@ -13,10 +13,12 @@ class InstallerTest(unittest.TestCase):
         temp = tempfile.TemporaryDirectory()
         self.addCleanup(temp.cleanup)
         self.root = Path(temp.name)
-        self.wheel = self.root / 'pkg.whl'
+        self.wheel = self.root / 'pkg-1.0.0-py3-none-any.whl'
         with zipfile.ZipFile(self.wheel, 'w') as archive:
             archive.writestr('pkg-1.0.0.dist-info/METADATA',
-                'Name: pkg\nVersion: 1.0.0\nRequires-Python: >=3.11\nRequires-Dist: dep>=1\nProvides-Extra: test\n\n')
+                'Metadata-Version: 2.3\nName: pkg\nVersion: 1.0.0\nRequires-Python: >=3.11\nRequires-Dist: dep>=1\nProvides-Extra: test\n\n')
+            archive.writestr('pkg-1.0.0.dist-info/WHEEL',
+                'Wheel-Version: 1.0\nRoot-Is-Purelib: true\nTag: py3-none-any\n\n')
         self.metadata = snapshot(self.wheel)
 
     def test_each_installer_surface_refuses_change(self):
@@ -81,3 +83,29 @@ class InstallerTest(unittest.TestCase):
         verify_direct_urls([requirement], lock, installed, self.root, extras=['optional'])
         with self.assertRaises(ValueError):
             verify_direct_urls([requirement], {}, {}, self.root, extras=['optional'])
+
+    def rewrite_wheel(self, edits):
+        with zipfile.ZipFile(self.wheel) as archive:
+            contents = {name: archive.read(name) for name in archive.namelist()}
+        for name, change in edits.items():
+            contents[name] = change(contents[name])
+        with zipfile.ZipFile(self.wheel, 'w') as archive:
+            for name, data in contents.items(): archive.writestr(name, data)
+
+    def test_optional_python_requirement_is_unrestricted(self):
+        self.rewrite_wheel({'pkg-1.0.0.dist-info/METADATA': lambda data: data.replace(b'Requires-Python: >=3.11\n', b'')})
+        result = snapshot(self.wheel)
+        self.assertEqual(result['requires_python'], '')
+        compatible(result, result)
+
+    def test_duplicate_python_requirement_is_rejected(self):
+        self.rewrite_wheel({'pkg-1.0.0.dist-info/METADATA': lambda data: data.replace(b'Requires-Python: >=3.11\n', b'Requires-Python: >=3.11\nRequires-Python: >=3.12\n')})
+        with self.assertRaisesRegex(ValueError, 'Ambiguous Python'): snapshot(self.wheel)
+
+    def test_wheel_tags_narrowing_and_filename_mismatch_refused(self):
+        self.rewrite_wheel({'pkg-1.0.0.dist-info/WHEEL': lambda data: data.replace(b'py3-none-any', b'cp312-cp312-manylinux_2_17_x86_64')})
+        with self.assertRaisesRegex(ValueError, 'filename'): snapshot(self.wheel)
+        renamed = self.root / 'pkg-1.0.0-cp312-cp312-manylinux_2_17_x86_64.whl'
+        self.wheel.rename(renamed)
+        narrowed = snapshot(renamed)
+        with self.assertRaisesRegex(ValueError, 'Incompatible'): compatible(self.metadata, narrowed)

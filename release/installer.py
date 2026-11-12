@@ -7,7 +7,8 @@ import zipfile
 
 from packaging.requirements import Requirement
 from packaging.specifiers import SpecifierSet
-from packaging.utils import canonicalize_name
+from packaging.utils import canonicalize_name, parse_wheel_filename
+from packaging.tags import parse_tag
 from release.policy import require, contract_path
 
 
@@ -20,7 +21,7 @@ def is_wheel(path, uri):
     return False
 
 
-def snapshot(wheel):
+def snapshot(wheel, artifact_uri=None):
     """Read metadata without importing the candidate or extracting its paths."""
     with zipfile.ZipFile(wheel) as archive:
         names = archive.namelist()
@@ -35,14 +36,33 @@ def snapshot(wheel):
             require(archive.getinfo(name).file_size <= 1024 * 1024, 'Oversized installer metadata')
             return archive.read(name)
         metadata = BytesParser().parsebytes(read(metadata_names[0]))
-        for field in ('Name', 'Version', 'Requires-Python'):
+        for field in ('Metadata-Version', 'Name', 'Version'):
             require(len(metadata.get_all(field, [])) == 1, 'Missing or ambiguous installer identity')
         canonicalize_name(metadata['Name'], validate=True)
-        SpecifierSet(metadata['Requires-Python'])
+        require(len(metadata.get_all('Requires-Python', [])) <= 1, 'Ambiguous Python requirement')
+        requires_python = metadata.get('Requires-Python', '')
+        SpecifierSet(requires_python)
+        require(prefix + 'WHEEL' in names, 'Wheel compatibility metadata required')
+        wheel_metadata = BytesParser().parsebytes(read(prefix + 'WHEEL'))
+        require(wheel_metadata.get_all('Wheel-Version') == ['1.0'], 'Unsupported wheel metadata version')
+        require(wheel_metadata.get_all('Root-Is-Purelib') in (['true'], ['false']), 'Ambiguous wheel installation scheme')
+        tags = set()
+        for tag in wheel_metadata.get_all('Tag', []):
+            tags.update(parse_tag(tag))
+        require(tags, 'Wheel compatibility tags required')
+        filenames = [Path(wheel).name]
+        if artifact_uri:
+            filenames.append(PurePosixPath(unquote(urlsplit(artifact_uri).path)).name)
+        for filename in filenames:
+            if filename.endswith('.whl'):
+                name, version, _, filename_tags = parse_wheel_filename(filename)
+                require(name == canonicalize_name(metadata['Name']) and str(version) == metadata['Version'] and
+                        filename_tags == tags, 'Wheel filename differs from installer metadata')
         requirements = sorted(str(Requirement(r)) for r in metadata.get_all('Requires-Dist', []))
         entries = read(prefix + 'entry_points.txt') if prefix + 'entry_points.txt' in names else b''
         return {'name': canonicalize_name(metadata['Name']), 'version': metadata['Version'],
-                'requires_python': metadata['Requires-Python'], 'requires_dist': requirements,
+                'requires_python': requires_python, 'requires_dist': requirements,
+                'wheel_tags': sorted(map(str, tags)), 'root_is_purelib': wheel_metadata['Root-Is-Purelib'],
                 'provides_extra': sorted(metadata.get_all('Provides-Extra', [])),
                 'entry_points_sha256': hashlib.sha256(entries).hexdigest()}
 
@@ -50,7 +70,7 @@ def snapshot(wheel):
 def compatible(before, after):
     """Conservative installer compatibility: version may change, other fields may not."""
     require(set(before) == set(after) == {'name', 'version', 'requires_python', 'requires_dist',
-                                         'provides_extra', 'entry_points_sha256'},
+                                         'provides_extra', 'entry_points_sha256', 'wheel_tags', 'root_is_purelib'},
             'Incomplete installer contract')
     require({k: v for k, v in before.items() if k != 'version'} ==
             {k: v for k, v in after.items() if k != 'version'}, 'Incompatible installer metadata')
