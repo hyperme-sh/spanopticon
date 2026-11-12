@@ -46,3 +46,35 @@ References: [SociACL #71](https://github.com/FyberLabs/SociACL/issues/71),
 [ACL #70](https://github.com/hyperme-sh/acl-service/pull/70),
 [edge #55](https://github.com/hyperme-sh/controlplane-edge/pull/55), and
 [s3r.ch #339](https://github.com/FyberLabs/s3r.ch/pull/339).
+
+
+## Public first-contact requests
+
+The separate SociACL #70 interface uses
+`https://<spanopticon-origin>/api/v1/acl/sociacl/first-contact/<64-lowercase-hex-channelId>/messages`.
+It follows the same edge-to-ACL ownership chain, upstream and CORS configuration.
+It requires the additive `platform_0087_first_contact` database migration and
+uses its own table, global quota and edge concurrency budget. TEST channels
+remain independent and moving; a missing schema or upstream refuses requests.
+
+POST carries 94–8192 bytes of opaque encrypted request data. GET uses the same
+bounded SHA-256 ID and standard-base64 response shape as private lanes. Each
+channel allows 128 messages / 1 MiB and ten new messages per rolling minute;
+the separate global budget is 4096 messages / 32 MiB, with seven-day retention.
+Exact retries keep the original expiry. The edge limits this interface to eight
+in-flight requests, strips credentials, applies anonymous source throttling and
+redacts channel paths from logs and tenant events. Infrastructure access logging
+must also redact channel identifiers.
+
+The s3r.ch adapter uses this Spanopticon URL, omits cookies and credentials,
+rejects redirects and verifies ciphertext digests. Public request data does not
+identify an account to storage. Clients still need authenticated fresh descriptor
+discovery, current sender/history verification, replay admission and explicit
+recipient acceptance. A successful append never grants a private lane. Product UI,
+descriptor publication and grant-outbox delivery are separate remaining work.
+
+References: [SociACL #70](https://github.com/FyberLabs/SociACL/issues/70),
+[database #44](https://github.com/hyperme-sh/controlplane-db/pull/44),
+[ACL #72](https://github.com/hyperme-sh/acl-service/pull/72),
+[edge #57](https://github.com/hyperme-sh/controlplane-edge/pull/57), and
+[s3r.ch #367](https://github.com/FyberLabs/s3r.ch/pull/367).
