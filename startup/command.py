@@ -19,6 +19,7 @@ class NoRedirect(HTTPRedirectHandler):
 
 def endpoint(value):
     parsed=urlsplit(value)
+    _=parsed.port
     if (parsed.scheme!='https' and not (parsed.scheme=='http' and parsed.hostname in ('localhost','127.0.0.1','::1')) or
             not parsed.hostname or parsed.username is not None or parsed.password is not None or parsed.query or parsed.fragment):
         raise ValueError('Verified owner endpoint required')

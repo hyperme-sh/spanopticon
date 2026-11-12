@@ -34,7 +34,7 @@ class CommandTests(unittest.TestCase):
     def test_duplicate_credentials_and_unverified_urls_refuse_before_calls(self):
         (self.root/'private/auth.token').write_text('user-private')
         with self.assertRaises(ValueError):Owners(self.env,self.root/'private/mapping.json')
-        for url in ('http://service.internal','https://user:secret@example.invalid','https://host.invalid?token=secret'):
+        for url in ('http://service.internal','https://user:secret@example.invalid','https://host.invalid?token=secret','https://host.invalid:abc','https://host.invalid:70000'):
             with self.subTest(url=url),self.assertRaises(ValueError):endpoint(url)
     def test_http_uses_only_selected_owner_credential_and_mapping(self):
         calls=[]
@@ -69,3 +69,16 @@ class CommandTests(unittest.TestCase):
     def test_shared_contract_bytes(self):
         source=json.loads((ROOT/'startup/contract_source.json').read_text())
         self.assertEqual(hashlib.sha256((ROOT/'startup/contract.py').read_bytes()).hexdigest(),source['sha256'])
+
+    def test_bootstrap_uses_invocation_private_staging(self):
+        from startup.bootstrap import main as bootstrap
+        states=[]
+        def invoke(argv):
+            path=Path(argv[argv.index('--config')+1]);states.append(path)
+            self.assertEqual(path.parent.stat().st_mode&0o777,0o700)
+            return 0
+        args=['bootstrap','--input-dir',str(self.source),'--state-dir',str(self.root/'state')]
+        with patch.dict(os.environ,{'STARTUP_IDENTITY_ENABLED':'1'}),patch('sys.argv',args),patch('startup.bootstrap.reconcile',invoke):
+            self.assertEqual(bootstrap(),0);self.assertEqual(bootstrap(),0)
+        self.assertNotEqual(states[0],states[1])
+        self.assertTrue(all(not path.exists() for path in states))

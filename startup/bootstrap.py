@@ -51,9 +51,12 @@ def main():
     args=parser.parse_args()
     try:
         if os.environ.get('STARTUP_IDENTITY_ENABLED')!='1':raise ValueError('Disabled')
-        staging=args.state_dir/'private'
-        os.environ.update(stage(args.input_dir,staging))
-        return reconcile(['--config',str(staging/'mapping.json'),'--state-dir',str(args.state_dir/'steps')])
+        import tempfile
+        args.state_dir.mkdir(mode=0o700,parents=True,exist_ok=True)
+        with tempfile.TemporaryDirectory(prefix='.startup-input-',dir=args.state_dir) as directory:
+            staging=Path(directory)
+            os.environ.update(stage(args.input_dir,staging))
+            return reconcile(['--config',str(staging/'mapping.json'),'--state-dir',str(args.state_dir/'steps')])
     except (ValueError,OSError,KeyError):
         print('Startup deployment inputs refused.',file=__import__('sys').stderr)
         return 1

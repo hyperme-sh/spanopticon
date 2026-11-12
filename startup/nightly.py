@@ -62,19 +62,20 @@ def qualify(config,environment,state_dir,broker_token,foreign_organization_id,*,
     expected=[{'slug':s,'id':o['organization_id'],'tenant_id':o['tenant_id'],'roles':o['roles']} for s,o in sorted(config['binding']['organizations'].items())]
     assert person['organizations']==expected
     yield CASES[2]
-    tenant=config['owner']['tenant_id'];scoped=[]
+    scoped=[]
     for org in expected:
+        tenant=org['tenant_id']
         status,session=request(auth+'/auth/scoped-session',broker_token,{'tenant_id':tenant,'organization_id':org['id']})
         assert status==200 and session.get('access_token')
-        scoped.append((org['id'],session['access_token']))
+        scoped.append((org['id'],tenant,session['access_token']))
         status,check=request(user+'/api/v1/authority/check',session['access_token'],{'version':1,'request_id':str(uuid.uuid4()),
             'action':'organization.admin' if 'admin' in org['roles'] else 'organization.read',
             'tenant_id':tenant,'organization_id':org['id']},{'X-Tenant-ID':tenant})
         assert status==200 and check['allowed'] is True
     yield CASES[3]
-    status,_=request(auth+'/auth/scoped-session',broker_token,{'tenant_id':tenant,'organization_id':foreign})
+    status,_=request(auth+'/auth/scoped-session',broker_token,{'tenant_id':config['owner']['tenant_id'],'organization_id':foreign})
     assert status==403
-    for index,(selected,token) in enumerate(scoped):
+    for index,(selected,tenant,token) in enumerate(scoped):
         other=scoped[(index+1)%len(scoped)][0]
         status,_=request(user+'/api/v1/authority/check',token,{'version':1,'request_id':str(uuid.uuid4()),
             'action':'organization.admin','tenant_id':tenant,'organization_id':other},{'X-Tenant-ID':tenant})
