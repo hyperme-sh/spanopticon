@@ -1,0 +1,22 @@
+# Add this one-shot service to deployment startup after owner migrations/readiness.
+# The supplied image follows the existing moving TEST channel.
+services:
+  startup-identity:
+    image: ${STARTUP_IMAGE:?Provide the moving TEST startup image}
+    pull_policy: always
+    user: '65532:65532'
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    tmpfs: ['/tmp:rw,noexec,nosuid,size=16777216,mode=1777']
+    environment:
+      STARTUP_IDENTITY_ENABLED: ${STARTUP_IDENTITY_ENABLED:-0}
+      STARTUP_USER_URL: ${STARTUP_USER_URL:?}
+      STARTUP_AUTH_URL: ${STARTUP_AUTH_URL:?}
+      STARTUP_ACL_URL: ${STARTUP_ACL_URL:?}
+      KEYCLOAK_INTERNAL_URL: ${KEYCLOAK_INTERNAL_URL:?}
+    command: [--input-dir, /run/startup-input, --state-dir, /state]
+    volumes:
+      - ${STARTUP_INPUT_DIRECTORY:?}:/run/startup-input:ro
+      - ${STARTUP_STATE_DIRECTORY:?}:/state
+    restart: 'no'
