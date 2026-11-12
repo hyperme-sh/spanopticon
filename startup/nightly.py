@@ -31,7 +31,11 @@ def exchange(url,token,body=None,headers=None):
             if len(raw)>65536:raise ValueError('Bounded owner response required')
             return response.status,json.loads(raw)
     except HTTPError as error:
-        return error.code,{}
+        raw=error.read(65537)
+        if len(raw)>65536:raise ValueError('Bounded owner response required')
+        try:body=json.loads(raw)
+        except (ValueError,UnicodeDecodeError):body={}
+        return error.code,body
 
 
 def qualify(config,environment,state_dir,broker_token,foreign_organization_id,*,owners=None,request=exchange):
