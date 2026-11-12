@@ -64,3 +64,20 @@ class InstallerTest(unittest.TestCase):
             bad['pkg']['url'] = invalid
             with self.subTest(url=invalid), self.assertRaises(ValueError):
                 verify_direct_urls(['pkg @ ' + invalid], bad, installed, self.root)
+
+    def test_inactive_and_mutually_exclusive_urls_use_selected_environment(self):
+        import sys
+        url, lock, installed = self.direct()
+        other = 'https://other.invalid/pkg.whl'
+        active = f'pkg @ {url} ; sys_platform == "{sys.platform}"'
+        inactive = f'pkg @ {other} ; sys_platform != "{sys.platform}"'
+        verify_direct_urls([inactive], {}, {}, self.root)
+        verify_direct_urls([active, inactive], lock, installed, self.root)
+
+    def test_optional_url_is_required_only_for_selected_extra(self):
+        url, lock, installed = self.direct()
+        requirement = 'pkg @ ' + url + ' ; extra == "optional"'
+        verify_direct_urls([requirement], {}, {}, self.root)
+        verify_direct_urls([requirement], lock, installed, self.root, extras=['optional'])
+        with self.assertRaises(ValueError):
+            verify_direct_urls([requirement], {}, {}, self.root, extras=['optional'])

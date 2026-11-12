@@ -2,12 +2,22 @@
 import hashlib
 from email.parser import BytesParser
 from pathlib import Path, PurePosixPath
-from urllib.parse import urlsplit, parse_qs
+from urllib.parse import urlsplit, parse_qs, unquote
 import zipfile
 
 from packaging.requirements import Requirement
+from packaging.specifiers import SpecifierSet
 from packaging.utils import canonicalize_name
 from release.policy import require, contract_path
+
+
+def is_wheel(path, uri):
+    if str(path).lower().endswith('.whl') or unquote(urlsplit(uri).path).lower().endswith('.whl'):
+        return True
+    if zipfile.is_zipfile(path):
+        with zipfile.ZipFile(path) as archive:
+            return any('.dist-info/' in name for name in archive.namelist())
+    return False
 
 
 def snapshot(wheel):
@@ -27,6 +37,8 @@ def snapshot(wheel):
         metadata = BytesParser().parsebytes(read(metadata_names[0]))
         for field in ('Name', 'Version', 'Requires-Python'):
             require(len(metadata.get_all(field, [])) == 1, 'Missing or ambiguous installer identity')
+        canonicalize_name(metadata['Name'], validate=True)
+        SpecifierSet(metadata['Requires-Python'])
         requirements = sorted(str(Requirement(r)) for r in metadata.get_all('Requires-Dist', []))
         entries = read(prefix + 'entry_points.txt') if prefix + 'entry_points.txt' in names else b''
         return {'name': canonicalize_name(metadata['Name']), 'version': metadata['Version'],
@@ -44,7 +56,7 @@ def compatible(before, after):
             {k: v for k, v in after.items() if k != 'version'}, 'Incompatible installer metadata')
 
 
-def verify_direct_urls(requirements, locked, installed, artifact_root):
+def verify_direct_urls(requirements, locked, installed, artifact_root, *, extras=()):
     """Bind URL requirements to locked bytes and installed PEP 610 records.
 
     VCS dependencies remain the responsibility of the owner's existing fixture
@@ -53,6 +65,8 @@ def verify_direct_urls(requirements, locked, installed, artifact_root):
     required = {}
     for raw in requirements:
         requirement = Requirement(raw)
+        if requirement.marker and not any(requirement.marker.evaluate({'extra': extra}) for extra in {'', *extras}):
+            continue
         if not requirement.url:
             continue
         name = canonicalize_name(requirement.name)

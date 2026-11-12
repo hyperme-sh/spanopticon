@@ -6,7 +6,7 @@ import subprocess
 
 from release.policy import contract_path, json_document, load_bundle, require, validate
 from release.accepted import verify_accepted_record
-from release.installer import snapshot, compatible, verify_direct_urls
+from release.installer import snapshot, compatible, verify_direct_urls, is_wheel
 
 
 def prepare(candidate, provenance, source_root, *, baseline_root=None, repository=None, fetch=None):
@@ -30,6 +30,11 @@ def prepare(candidate, provenance, source_root, *, baseline_root=None, repositor
     require(git('rev-parse', 'HEAD') == revision, 'Preparation source revision differs from checkout')
     require(not git('status', '--porcelain', '--untracked-files=no'),
             'Preparation source has tracked changes')
+    flags = git('ls-files', '-v', '-z').split('\0')
+    require(all(not entry or entry.startswith('H ') for entry in flags),
+            'Source index flags prevent integrity verification')
+    require(not any(entry.startswith('160000 ') for entry in git('ls-files', '--stage', '-z').split('\0')),
+            'Submodule source requires separate owner preparation')
     locks = record.get('locks')
     require(isinstance(locks, dict) and locks, 'Dependency lock provenance required')
     for relative, digest in locks.items():
@@ -48,12 +53,15 @@ def prepare(candidate, provenance, source_root, *, baseline_root=None, repositor
         path = contract_path(candidate.parent, artifacts[name])
         require(hashlib.sha256(path.read_bytes()).hexdigest() == component['artifact']['sha256'],
                 f'{name}: preparation artifact digest mismatch')
-        if path.suffix == '.whl':
+        if is_wheel(path, component['artifact']['uri']):
             installers[name] = snapshot(path)
             require(installers[name]['version'] == component['version'], 'Wheel version differs from candidate')
+            extras = record.get('extras', {}).get(name, [])
+            require(isinstance(extras, list) and all(isinstance(x, str) for x in extras) and
+                    set(extras) <= set(installers[name]['provides_extra']), 'Unknown selected installer extras')
             verify_direct_urls(installers[name]['requires_dist'],
                 record.get('direct_urls', {}).get(name, {}),
-                record.get('installed_direct_urls', {}).get(name, {}), candidate.parent)
+                record.get('installed_direct_urls', {}).get(name, {}), candidate.parent, extras=extras)
     if baseline_root is None and (source_root / 'releases/accepted').exists():
         baseline_root = source_root
     if baseline_root is not None:
@@ -62,7 +70,8 @@ def prepare(candidate, provenance, source_root, *, baseline_root=None, repositor
         old, _ = load_bundle(previous)
         validate(previous, candidate)
         for name, installer in installers.items():
-            require(name in old['components'], 'Installer baseline required for existing component')
+            if name not in old['components']:
+                continue
             prior = contract_path(previous.parent, old['components'][name].get('installer_artifact'))
             require(hashlib.sha256(prior.read_bytes()).hexdigest() == old['components'][name]['artifact']['sha256'],
                     'Stable installer artifact digest mismatch')

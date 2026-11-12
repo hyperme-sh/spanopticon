@@ -101,8 +101,24 @@ class PreparationTest(unittest.TestCase):
         self.git('update-index', '--assume-unchanged', 'requirements.lock')
         (self.source / 'requirements.lock').write_text('changed')
         self.record['locks']['requirements.lock'] = hashlib.sha256(b'changed').hexdigest()
-        with self.assertRaisesRegex(ValueError, 'committed source'): self.check()
+        with self.assertRaisesRegex(ValueError, 'index flags'): self.check()
 
     def test_boolean_schema_is_not_a_version(self):
         self.record['schema_version'] = True
         with self.assertRaisesRegex(ValueError, 'schema|provenance'): self.check()
+
+    def test_index_flags_cannot_hide_non_lock_source_changes(self):
+        for flag in ('--assume-unchanged', '--skip-worktree'):
+            with self.subTest(flag=flag):
+                path = self.source / 'app.py'
+                path.write_text('original')
+                self.git('add', 'app.py')
+                self.git('commit', '-qm', 'Add source')
+                self.record['source_revision'] = self.git('rev-parse', 'HEAD')
+                self.git('update-index', flag, 'app.py')
+                path.write_text('changed')
+                with self.assertRaisesRegex(ValueError, 'index flags'): self.check()
+                self.git('update-index', flag.replace('--', '--no-'), 'app.py')
+                path.write_text('original')
+                self.git('rm', 'app.py')
+                self.git('commit', '-qm', 'Remove fixture source')

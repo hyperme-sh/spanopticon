@@ -45,19 +45,29 @@ def exercise(case):
                          'installer_artifact': artifact.name,
                          'artifact': {'kind': 'package', 'uri': 'https://example.invalid/' + artifact.name,
                                       'sha256': hashlib.sha256(artifact.read_bytes()).hexdigest()}}
-            write_json(folder / 'release.json', {'schema_version': 1, 'line': '1.0', 'components': {'component': component}})
+            write_json(folder / 'release.json', {'schema_version': 1, 'line': '.'.join(version.split('.')[:2]), 'components': {'component': component}})
             return artifact, component
-        artifact, component = bundle(root / 'candidate', '1.0.1', '>=3.12' if case == 'changed-installer' else '>=3.11')
+        artifact, component = bundle(root / 'candidate', '1.1.0' if case == 'new-component' else '1.0.1', '>=3.12' if case in {'changed-installer', 'renamed-wheel'} else '>=3.11')
         record = {'schema_version': 1, 'source_revision': revision,
                   'locks': {'requirements.lock': hashlib.sha256((source / 'requirements.lock').read_bytes()).hexdigest()},
                   'artifacts': {'component': artifact.name}}
+        if case == 'new-component':
+            declaration = json.loads((root / 'candidate/release.json').read_text())
+            declaration['components']['additional'] = dict(component)
+            write_json(root / 'candidate/release.json', declaration)
+            record['artifacts']['additional'] = artifact.name
         if case == 'tampered-artifact': artifact.write_bytes(b'wrong')
         if case == 'missing-source': record.pop('source_revision')
         if case == 'missing-lock': record.pop('locks')
+        if case == 'renamed-wheel':
+            renamed = artifact.with_suffix('.bin')
+            artifact.rename(renamed)
+            artifact = renamed
+            record['artifacts']['component'] = renamed.name
         provenance = root / 'candidate/preparation.json'
         write_json(provenance, record)
         options = {}
-        if case in {'stable-baseline', 'test-baseline', 'changed-installer'}:
+        if case in {'stable-baseline', 'test-baseline', 'changed-installer', 'renamed-wheel', 'new-component'}:
             baseline = root / 'baseline'
             old_artifact, old = bundle(baseline / 'releases/accepted', '1.0.0')
             tag = 'test-' + revision if case == 'test-baseline' else 'v1.0.0'

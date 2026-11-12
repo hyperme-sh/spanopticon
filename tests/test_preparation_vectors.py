@@ -8,7 +8,7 @@ class PreparationVectorsTest(unittest.TestCase):
     pass
 
 
-def test_vector(vector):
+def make_vector_test(vector):
     def run(self):
         if vector['accepted']:
             result = exercise(vector['case'])
@@ -20,4 +20,4 @@ def test_vector(vector):
 
 
 for vector in json.loads((Path(__file__).resolve().parents[1] / 'release/preparation-vectors.json').read_text()):
-    setattr(PreparationVectorsTest, 'test_' + vector['case'].replace('-', '_'), test_vector(vector))
+    setattr(PreparationVectorsTest, 'test_' + vector['case'].replace('-', '_'), make_vector_test(vector))
