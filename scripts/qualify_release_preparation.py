@@ -17,7 +17,8 @@ from release.policy import require
 
 def qualify(root, output):
     require(os.environ.get('GITHUB_EVENT_NAME') == 'schedule' and
-            os.environ.get('GITHUB_REPOSITORY') == 'FyberLabs/infra', 'Central scheduled batch required')
+            os.environ.get('GITHUB_REPOSITORY') == 'hyperme-sh/spanopticon' and
+            os.environ.get('NIGHTLY_SUITE') == 'release-preparation-source', 'Central scheduled batch required')
     root, output = Path(root).resolve(), Path(output).resolve()
     output.mkdir(parents=True, exist_ok=True)
     revision = subprocess.check_output(['git', '-C', str(root), 'rev-parse', 'HEAD']).decode().strip()
