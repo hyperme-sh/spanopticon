@@ -1,1 +1,3 @@
+imagePullPolicy: Always
 existingSecret: ''
+imageReference: ghcr.io/hyperme-sh/hypermesh-plane/runtime:test

@@ -68,3 +68,7 @@ Installing an App or setting its key without granting Actions read is not enough
 Never substitute a broad personal token or change repository visibility to make
 the check pass. Main private-owner publication remains unavailable until access
 and exact-byte verification succeed.
+
+## TEST image selection
+
+Gateway and Plane serving templates independently follow their owner `runtime:test` channels. Compose accepts per-owner `GATEWAY_IMAGE` and `PLANE_IMAGE` overrides; each Helm chart accepts `imageReference`. Qualification checks supply the selected published candidate through those overrides without changing serving defaults. Image digests in `owner-images` describe retained archives for byte verification, not serving selectors or runtime comparison requirements. This does not authorize publishing or moving a tag.

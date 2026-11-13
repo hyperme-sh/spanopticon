@@ -16,10 +16,12 @@ args=parser.parse_args()
 root=Path(__file__).resolve().parents[1]
 value=image.pin(b.document((root/'fleet/owner-images/hypermesh-gateway.json').read_bytes()))
 image.verify(value,args.directory/'image.tar')
+local_image='qualified-owner:gateway-'+value['source_revision']
 subprocess.run(['docker','pull','--platform','linux/amd64',value['source']+'@'+value['manifest_digest']],check=True,stdout=subprocess.DEVNULL)
+subprocess.run(['docker','image','tag',value['source']+'@'+value['manifest_digest'],local_image],check=True)
 with tempfile.TemporaryDirectory(prefix='gateway-startup-') as directory:
     override=Path(directory)/'override.json'
-    override.write_text(json.dumps({'services':{'gateway':{'image':value['source']+'@'+value['manifest_digest'],'pull_policy':'never'}}}))
+    override.write_text(json.dumps({'services':{'gateway':{'image':local_image,'pull_policy':'never'}}}))
     command=['docker','compose','-p','spanopticon-owner-startup','-f',str(root/'fleet/gateway/compose.yaml'),'-f',str(override)]
     try:
         subprocess.run([*command,'up','-d','--wait','--wait-timeout','100'],check=True,timeout=150)
