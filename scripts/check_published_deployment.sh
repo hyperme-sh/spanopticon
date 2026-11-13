@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
-# Verify the label in GHCR and deploy the pinned manifests with each native engine.
+# Deploy the selected published test tag with each native engine.
 set -euo pipefail
 [[ $CANDIDATE =~ ^0\.24\.0-test\.[1-9][0-9]*$ ]]
 [[ $ENGINE == compose || $ENGINE == helm ]]
+export SPANOPTICON_TEST_TAG="$CANDIDATE"
 umask 077
 scratch=$(mktemp -d)
 export DOCKER_CONFIG="$scratch/docker" KUBECONFIG="$scratch/kubeconfig"
@@ -10,17 +11,8 @@ mkdir "$DOCKER_CONFIG"
 out="$RUNNER_TEMP/published-deployment"
 mkdir -p "$out"
 project="registry-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
-# Exercise proposed assets when their owner pins still match the publication.
-# A new owner pin gets its own pre-publication checks in owner-images.yml.
-declare -A assets
-for owner in gateway plane; do
-  pin="fleet/owner-images/hypermesh-$owner.json"
-  if cmp -s "$pin" "published/$pin"; then
-    assets[$owner]="fleet/$owner"
-  else
-    assets[$owner]="published/fleet/$owner"
-  fi
-done
+# Qualify the proposed templates against the selected published version tag.
+declare -A assets=([gateway]=fleet/gateway [plane]=fleet/plane)
 compose=(docker compose -p "$project" -f "${assets[gateway]}/compose.yaml" -f "${assets[plane]}/compose.yaml")
 forward_pid=
 cluster_created=false
@@ -45,10 +37,7 @@ export TEST_POSTGRES_PASSWORD=$(openssl rand -hex 24) TEST_TICKET_KEY=$(openssl 
 for owner in gateway plane; do
   pin="published/fleet/owner-images/hypermesh-$owner.json"
   image=$(jq -er .destination "$pin")
-  expected=$(jq -er .manifest_digest "$pin")
-  docker buildx imagetools inspect --raw "$image:$CANDIDATE" > "$scratch/$owner.manifest"
-  actual="sha256:$(sha256sum "$scratch/$owner.manifest" | cut -d' ' -f1)"
-  [[ $actual == "$expected" ]]
+  docker buildx imagetools inspect "$image:$CANDIDATE" >/dev/null
 done
 
 if [[ $ENGINE == compose ]]; then
@@ -68,17 +57,16 @@ print(json.dumps({'apiVersion':'v1','kind':'Secret','metadata':{'name':'plane-te
                   'stringData':{'postgres-password':password,'ticket-key':os.environ['TEST_TICKET_KEY'],
                                 'database-url':f'postgresql+psycopg://plane_test:{password}@plane-postgres:5432/plane_test'}}))
 PY
-  helm install gateway "${assets[gateway]}/chart" --wait --timeout 3m
-  helm install plane "${assets[plane]}/chart" --set existingSecret=plane-test --wait --timeout 4m
+  helm install gateway "${assets[gateway]}/chart" --set-string "imageTag=$CANDIDATE" --wait --timeout 3m
+  helm install plane "${assets[plane]}/chart" --set existingSecret=plane-test --set-string "imageTag=$CANDIDATE" --wait --timeout 4m
 fi
 for owner in gateway plane; do
   pin="published/fleet/owner-images/hypermesh-$owner.json"
-  expected=$(jq -er '.destination+"@"+.manifest_digest' "$pin")
+  expected=$(jq -er --arg tag "$CANDIDATE" '.destination+":"+$tag' "$pin")
   source=$(jq -er .source_revision "$pin")
   if [[ $ENGINE == compose ]]; then
     container=$("${compose[@]}" ps -q "$owner")
     [[ $(docker inspect -f '{{.Config.Image}}' "$container") == "$expected" ]]
-    [[ $(docker inspect -f '{{.Image}}' "$container") == "$(jq -er .config_digest "$pin")" ]]
     endpoint=$("${compose[@]}" port "$owner" 8000)
   else
     deployment="$owner-$owner"

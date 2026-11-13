@@ -1,6 +1,6 @@
 # Disposable test database only. Never point this bootstrap at an existing deployment.
 x-plane: &plane
-  image: ghcr.io/hyperme-sh/spanopticon-hypermesh-plane@sha256:95cde2049c460fe37626e4036378bc200099f2f8c93c630b346dc433811fc072
+  image: ghcr.io/hyperme-sh/spanopticon-hypermesh-plane:${SPANOPTICON_TEST_TAG:?Set a published test tag}
   user: '65532:65532'
   read_only: true
   cap_drop: [ALL]

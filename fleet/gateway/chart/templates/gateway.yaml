@@ -14,7 +14,7 @@ spec:
       securityContext: {runAsNonRoot: true, runAsUser: 65532, runAsGroup: 65532, fsGroup: 65532}
       containers:
         - name: gateway
-          image: ghcr.io/hyperme-sh/spanopticon-hypermesh-gateway@sha256:0c153a653423dfa5598e78c731e2af59dae529234631dd9187ab5c220fe17df9
+          image: ghcr.io/hyperme-sh/spanopticon-hypermesh-gateway:{{ required "Set imageTag to a published test tag" .Values.imageTag }}
           securityContext:
             readOnlyRootFilesystem: true
             allowPrivilegeEscalation: false
