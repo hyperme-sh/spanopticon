@@ -1,7 +1,7 @@
 # Test startup only: no tickets, providers, credentials, or WireGuard activation.
 services:
   gateway:
-    image: ghcr.io/hyperme-sh/spanopticon-hypermesh-gateway:${SPANOPTICON_TEST_TAG:?Set a published test tag}
+    image: ${GATEWAY_IMAGE:-ghcr.io/hyperme-sh/hypermesh-gateway/runtime:test}
     user: '65532:65532'
     read_only: true
     cap_drop: [ALL]

@@ -69,6 +69,6 @@ Never substitute a broad personal token or change repository visibility to make
 the check pass. Main private-owner publication remains unavailable until access
 and exact-byte verification succeed.
 
-## Published test tag selection
+## TEST image selection
 
-Set `SPANOPTICON_TEST_TAG` to the existing `0.24.0-test.N` candidate when using the gateway/plane Compose templates. Pass the same tag as `--set-string imageTag=0.24.0-test.N` to each Helm chart. The scheduled published-deployment check supplies its selected candidate automatically. Image digests in `owner-images` describe retained archives for byte verification; they do not select the serving image or constrain its runtime comparison. This does not authorize publishing or moving a tag.
+Gateway and Plane serving templates independently follow their owner `runtime:test` channels. Compose accepts per-owner `GATEWAY_IMAGE` and `PLANE_IMAGE` overrides; each Helm chart accepts `imageReference`. Qualification checks supply the selected published candidate through those overrides without changing serving defaults. Image digests in `owner-images` describe retained archives for byte verification, not serving selectors or runtime comparison requirements. This does not authorize publishing or moving a tag.

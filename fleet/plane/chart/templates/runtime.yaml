@@ -87,7 +87,7 @@ spec:
         fsGroup: 65532
       initContainers:
       - name: provision
-        image: ghcr.io/hyperme-sh/spanopticon-hypermesh-plane:{{ required "Set imageTag to a published test tag" .Values.imageTag }}
+        image: {{ .Values.imageReference }}
         imagePullPolicy: IfNotPresent
         command:
         - /app/.venv/bin/python
@@ -128,7 +128,7 @@ spec:
           mountPath: /tmp
       containers:
       - name: plane
-        image: ghcr.io/hyperme-sh/spanopticon-hypermesh-plane:{{ required "Set imageTag to a published test tag" .Values.imageTag }}
+        image: {{ .Values.imageReference }}
         imagePullPolicy: IfNotPresent
         env:
         - name: DATABASE_URL

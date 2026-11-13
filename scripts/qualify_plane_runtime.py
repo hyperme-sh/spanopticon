@@ -23,13 +23,14 @@ def main():
     parser=argparse.ArgumentParser();parser.add_argument('--directory',required=True,type=Path);parser.add_argument('--engine',choices=['compose','helm'],required=True);args=parser.parse_args()
     pin=json.loads((ROOT/'fleet/owner-images/hypermesh-plane.json').read_text());image.verify(pin,args.directory/'image.tar')
     run(['docker','pull','--platform','linux/amd64',pin['source']+'@'+pin['manifest_digest']],stdout=subprocess.DEVNULL)
-    run(['docker','image','tag',pin['source']+'@'+pin['manifest_digest'],'qualified-owner:ci'])
+    local_image='qualified-owner:plane-'+pin['source_revision']
+    run(['docker','image','tag',pin['source']+'@'+pin['manifest_digest'],local_image])
     project='plane-check-'+uuid.uuid4().hex[:10];password=secrets.token_hex(24);key=secrets.token_hex(32)
     with tempfile.TemporaryDirectory(prefix='plane-qualification-') as directory:
         scratch=Path(directory)
         if args.engine=='compose':
-            env={**os.environ,'TEST_POSTGRES_PASSWORD':password,'TEST_TICKET_KEY':key,'SPANOPTICON_TEST_TAG':'qualification'}
-            override=scratch/'override.json';override.write_text(json.dumps({'services':{n:{'image':'qualified-owner:ci','pull_policy':'never'} for n in ('plane','provision')}}))
+            env={**os.environ,'TEST_POSTGRES_PASSWORD':password,'TEST_TICKET_KEY':key}
+            override=scratch/'override.json';override.write_text(json.dumps({'services':{n:{'image':local_image,'pull_policy':'never'} for n in ('plane','provision')}}))
             cmd=['docker','compose','-p',project,'-f',str(ROOT/'fleet/plane/compose.yaml'),'-f',str(override)]
             try:
                 run([*cmd,'up','-d','--wait','--wait-timeout','150'],env=env)
@@ -48,7 +49,7 @@ def main():
                 run(['docker','exec',project+'-control-plane','ctr','-n','k8s.io','images','tag','docker.io/library/qualified-owner:ci',pin['destination']+':qualification'])
                 secret={'apiVersion':'v1','kind':'Secret','metadata':{'name':'plane-test'},'stringData':{'postgres-password':password,'ticket-key':key,'database-url':f'postgresql+psycopg://plane_test:{password}@{project}-postgres:5432/plane_test'}}
                 run(['kubectl','apply','-f','-'],env=env,input=json.dumps(secret).encode(),stdout=subprocess.DEVNULL)
-                helm=['helm','upgrade','--install',project,str(ROOT/'fleet/plane/chart'),'--set','existingSecret=plane-test','--set-string','imageTag=qualification','--wait','--timeout','180s']
+                helm=['helm','upgrade','--install',project,str(ROOT/'fleet/plane/chart'),'--set','existingSecret=plane-test','--set-string','imageReference='+pin['destination']+':qualification','--wait','--timeout','180s']
                 run(helm,env=env)
                 with socket.socket() as sock:sock.bind(('127.0.0.1',0));port=sock.getsockname()[1]
                 forward=subprocess.Popen(['kubectl','port-forward','service/'+project+'-plane',str(port)+':8000'],env=env,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)

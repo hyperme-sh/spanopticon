@@ -3,7 +3,6 @@
 set -euo pipefail
 [[ $CANDIDATE =~ ^0\.24\.0-test\.[1-9][0-9]*$ ]]
 [[ $ENGINE == compose || $ENGINE == helm ]]
-export SPANOPTICON_TEST_TAG="$CANDIDATE"
 umask 077
 scratch=$(mktemp -d)
 export DOCKER_CONFIG="$scratch/docker" KUBECONFIG="$scratch/kubeconfig"
@@ -38,6 +37,8 @@ for owner in gateway plane; do
   pin="published/fleet/owner-images/hypermesh-$owner.json"
   image=$(jq -er .destination "$pin")
   docker buildx imagetools inspect "$image:$CANDIDATE" >/dev/null
+  if [[ $owner == gateway ]]; then export GATEWAY_IMAGE="$image:$CANDIDATE";
+  else export PLANE_IMAGE="$image:$CANDIDATE"; fi
 done
 
 if [[ $ENGINE == compose ]]; then
@@ -57,8 +58,8 @@ print(json.dumps({'apiVersion':'v1','kind':'Secret','metadata':{'name':'plane-te
                   'stringData':{'postgres-password':password,'ticket-key':os.environ['TEST_TICKET_KEY'],
                                 'database-url':f'postgresql+psycopg://plane_test:{password}@plane-postgres:5432/plane_test'}}))
 PY
-  helm install gateway "${assets[gateway]}/chart" --set-string "imageTag=$CANDIDATE" --wait --timeout 3m
-  helm install plane "${assets[plane]}/chart" --set existingSecret=plane-test --set-string "imageTag=$CANDIDATE" --wait --timeout 4m
+  helm install gateway "${assets[gateway]}/chart" --set-string "imageReference=$GATEWAY_IMAGE" --wait --timeout 3m
+  helm install plane "${assets[plane]}/chart" --set existingSecret=plane-test --set-string "imageReference=$PLANE_IMAGE" --wait --timeout 4m
 fi
 for owner in gateway plane; do
   pin="published/fleet/owner-images/hypermesh-$owner.json"
