@@ -1,1 +1,2 @@
+imagePullPolicy: Always
 imageReference: ghcr.io/hyperme-sh/hypermesh-gateway/runtime:test

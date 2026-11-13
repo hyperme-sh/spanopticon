@@ -88,7 +88,7 @@ spec:
       initContainers:
       - name: provision
         image: {{ .Values.imageReference }}
-        imagePullPolicy: IfNotPresent
+        imagePullPolicy: {{ .Values.imagePullPolicy }}
         command:
         - /app/.venv/bin/python
         - -c
@@ -129,7 +129,7 @@ spec:
       containers:
       - name: plane
         image: {{ .Values.imageReference }}
-        imagePullPolicy: IfNotPresent
+        imagePullPolicy: {{ .Values.imagePullPolicy }}
         env:
         - name: DATABASE_URL
           valueFrom:

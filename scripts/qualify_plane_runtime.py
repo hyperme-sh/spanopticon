@@ -49,7 +49,7 @@ def main():
                 run(['docker','exec',project+'-control-plane','ctr','-n','k8s.io','images','tag','docker.io/library/qualified-owner:ci',pin['destination']+':qualification'])
                 secret={'apiVersion':'v1','kind':'Secret','metadata':{'name':'plane-test'},'stringData':{'postgres-password':password,'ticket-key':key,'database-url':f'postgresql+psycopg://plane_test:{password}@{project}-postgres:5432/plane_test'}}
                 run(['kubectl','apply','-f','-'],env=env,input=json.dumps(secret).encode(),stdout=subprocess.DEVNULL)
-                helm=['helm','upgrade','--install',project,str(ROOT/'fleet/plane/chart'),'--set','existingSecret=plane-test','--set-string','imageReference='+pin['destination']+':qualification','--wait','--timeout','180s']
+                helm=['helm','upgrade','--install',project,str(ROOT/'fleet/plane/chart'),'--set','existingSecret=plane-test','--set','imagePullPolicy=Never','--set-string','imageReference='+pin['destination']+':qualification','--wait','--timeout','180s']
                 run(helm,env=env)
                 with socket.socket() as sock:sock.bind(('127.0.0.1',0));port=sock.getsockname()[1]
                 forward=subprocess.Popen(['kubectl','port-forward','service/'+project+'-plane',str(port)+':8000'],env=env,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)

@@ -2,6 +2,7 @@
 services:
   gateway:
     image: ${GATEWAY_IMAGE:-ghcr.io/hyperme-sh/hypermesh-gateway/runtime:test}
+    pull_policy: always
     user: '65532:65532'
     read_only: true
     cap_drop: [ALL]
