@@ -4,6 +4,7 @@ import base64
 import hashlib
 import json
 import os
+import re
 from pathlib import Path
 import secrets
 import subprocess
@@ -12,6 +13,31 @@ import time
 import urllib.error
 import urllib.request
 import uuid
+
+
+def inspect_service_image(run, service, project, revision):
+    """Bind the inspected image to the exact Compose container that ran."""
+    ids = run("--profile", "host", "ps", "-aq", service, capture=True).split()
+    if len(ids) != 1:
+        raise ValueError("expected exactly one service container")
+    container = json.loads(subprocess.check_output(
+        ["docker", "container", "inspect", ids[0]], text=True))[0]
+    labels = container["Config"]["Labels"]
+    if (labels.get("com.docker.compose.project") != project
+            or labels.get("com.docker.compose.service") != service):
+        raise ValueError("container ownership mismatch")
+    image_id = container["Image"]
+    if not re.fullmatch(r"sha256:[0-9a-f]{64}", image_id):
+        raise ValueError("container image identity is not immutable")
+    # Compose can list an index digest that is not a local image ID. Resolve
+    # the original reference, then reject a moved reference by exact identity.
+    actual = json.loads(subprocess.check_output(
+        ["docker", "image", "inspect", container["Config"]["Image"]], text=True))[0]
+    if actual["Id"] != image_id:
+        raise ValueError("container and local image identity mismatch")
+    if actual["Config"]["Labels"].get("org.opencontainers.image.revision") != revision:
+        raise ValueError("image revision mismatch")
+    return image_id
 
 
 def main():
@@ -202,10 +228,8 @@ assert Path('/state/host.json').stat().st_mode & 0o777 == 0o600
                 durable_event=terminal["event"], settlement=settled["settlement"],
                 response_loss_replay=True, settlement_operations=1,
                 test_grant={"amount": 1, "asset": "TEST", "network": "local"},
-                images={name: run("images", "-q", name, capture=True) for name in ("identity", "operator", "host", "settlement")})
-            for image_id in receipt["images"].values():
-                actual = json.loads(subprocess.check_output(["docker", "image", "inspect", image_id], text=True))[0]
-                assert actual["Config"]["Labels"]["org.opencontainers.image.revision"] == revision
+                images={name: inspect_service_image(run, name, project, revision)
+                        for name in ("identity", "operator", "host", "settlement")})
         finally:
             run("--profile", "host", "down", "--remove-orphans")
             receipt["containers_removed"] = not run("--profile", "host", "ps", "-aq", capture=True)
