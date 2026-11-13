@@ -44,24 +44,11 @@ the [Apache License, Version 2.0](LICENSE).
 
 ## Template release channels
 
-The declared next bundle version is in [.github/test-channel.json](.github/test-channel.json).
-After main template validation succeeds, the test publisher creates
-`0.24.0-test.0`, `0.24.0-test.1`, and so on, with the exact tested template archive.
-Pull requests validate without publishing. Counters are scoped to this repository
-and target version; the publisher never rewrites existing tags or assets.
-
-Choose a gold test by its exact tag. An explicit **Test bundles** workflow dispatch
-on main with `gold_test` copies that bundle's assets, including its original test
-provenance, unchanged to the declared `0.24.0` stable bundle. It does not rebuild,
-change embedded package versions or automatically select a gold candidate.
-Stable promotion requires the owner's explicit selection; automated main
-publication is confined to the test channel. After stable promotion, declare the
-next target before publishing new test candidates.
-
-These are template release bundles, not service package versions or evidence of
-runtime/provider acceptance. The services' qualified dependency locks and package
-compatibility checks remain separate. See [test bundles](docs/test-bundles.md) for
-publication, promotion and retention behavior.
+Main template validation remains. The former Test bundles workflow that
+published `0.24.0-test.N` GitHub prereleases and promoted a gold candidate has
+been removed. Automatic package or template prereleases are not published.
+Fleet test container tags are documented in [docs/fleet-test-publication.md](docs/fleet-test-publication.md).
+See [test bundles](docs/test-bundles.md) for the current policy.
 
 ### Additive Python module releases
 

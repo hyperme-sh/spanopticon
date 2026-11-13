@@ -39,20 +39,13 @@ The user is the sole developer. Never add or enable GitHub required reviewers, b
 
 Reusable workflows must route private callers to `[self-hosted, linux, x64, debrunner]`. Public callers use hosted runners; do not expose private debrunners to public caller jobs.
 
-## Authorized test bundle automation
+## Authorized fleet test publication
 
-The owner authorized `0.24.0-test.N` automatic test bundle tags and prereleases
-from qualified main artifacts, driven by `.github/test-channel.json`. Bundle
-labels preserve embedded package versions. This scoped authorization supersedes
-the blanket prohibition only for that opted-in test channel. Stable promotion
-still requires explicit owner selection of the exact gold test and destination;
-never dispatch it based only on CI success or a merged PR. Do not move/delete
-historical tags, change package versions, or advance `next` without authorization.
-
-The owner also authorizes fleet `0.24.0-test.N` GHCR autotagging and test
-publication for qualified PR-based main updates without further approval.
-This does not authorize stable tags/releases, gold promotion, version advances,
-or replacement/deletion of existing immutable candidates.
+Fleet `0.24.0-test.N` GHCR autotagging and test publication remain authorized
+for qualified PR-based main updates. Package and template prerelease
+publication from the former Test bundles workflow has been removed. This does
+not authorize stable tags or releases, gold promotion, version advances, or
+replacement or deletion of existing immutable candidates.
 
 This authorization applies only to CI. Agents must not start or repeat
 these jobs by hand on shared hosts.
@@ -74,7 +67,7 @@ a new issue for that failure and links the closed issue when one exists.
 CI results and full integration output are not a Product Sign-off gate. Green
 CI and clean reviews are enough for Sign-off.
 
-Authorized CI workflows, including test-bundle publication and existing smoke
+Authorized CI workflows, including existing smoke
 or owner-integration jobs, may keep running in CI. Agents must not start or
 repeat those jobs by hand on shared hosts.
 
