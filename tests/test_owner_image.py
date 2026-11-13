@@ -107,7 +107,7 @@ class OwnerImageTests(unittest.TestCase):
                         uploads.append(step)
         large={'fleet-test-bundle-${{ github.run_attempt }}'}
         small={'fleet-test-publication-${{ github.run_attempt }}',
-               'published-test-deployment-${{ matrix.engine }}','tested-dist'}
+               'published-test-deployment-${{ matrix.engine }}'}
         seen=set()
         for step in uploads:
             name=step['with']['name'];seen.add(name)
