@@ -122,7 +122,10 @@ except urllib.error.HTTPError as exc:
 
         prefix = "/api/v1/hypermesh"
         try:
-            run("up", "-d", "--build", "--wait", "--wait-timeout", "90", "identity", "operator", "settlement")
+            # Build every image before creating any container; later builds can
+            # replace attestation digests under an already running service.
+            run("--profile", "host", "build", "identity", "operator", "settlement", "host")
+            run("up", "-d", "--no-build", "--wait", "--wait-timeout", "90", "identity", "operator", "settlement")
             run("exec", "-T", "operator", "python", "-m", "unittest", "discover", "-s", "examples/operator/tests", "-v")
             call("identity", "/token", {"username": "owner", "password": "wrong"}, expected=401)
             tokens = {name: call("identity", "/token", {"username": name, "password": password})["access_token"]
@@ -143,12 +146,12 @@ except urllib.error.HTTPError as exc:
             request = {"device_id": device["id"], "request_id": "self-use-one", "self_use": True, "reserved_hours": 1}
             call("operator", prefix + "/leases", request, token=owner, expected=409)
             write("host.json", {"tenant_id": tenant, "enroll_token": device["issued_enroll_token"]})
-            probe = subprocess.run(compose + ["--profile", "host", "run", "--build", "--rm", "--no-deps", "host",
+            probe = subprocess.run(compose + ["--profile", "host", "run", "--pull", "never", "--rm", "--no-deps", "host",
                 "python", "-m", "examples.operator.tests.enrollment_probe"], env=env, capture_output=True, text=True)
             if probe.returncode != 73:
                 raise AssertionError("Lost-response probe did not reach its committed enrollment exit")
-            run("up", "-d", "--no-deps", "--force-recreate", "--wait", "operator")
-            run("--profile", "host", "up", "-d", "--build", "--wait", "--wait-timeout", "90", "host")
+            run("up", "-d", "--no-build", "--no-deps", "--force-recreate", "--wait", "operator")
+            run("--profile", "host", "up", "-d", "--no-build", "--wait", "--wait-timeout", "90", "host")
             run("exec", "-T", "host", "python", "-c", """import json,hashlib
 from pathlib import Path
 identity=json.loads(Path('/state/host.json').read_text())
@@ -202,16 +205,16 @@ assert Path('/state/host.json').stat().st_mode & 0o777 == 0o600
             assert terminal["event"]["payload"]["tenant_id"] == tenant
             logs = run("logs", "--no-log-prefix", "host", capture=True)
             assert '"executed_lease": "' + lease["id"] + '"' in logs
-            run("up", "-d", "--no-deps", "--force-recreate", "--wait", "operator")
+            run("up", "-d", "--no-build", "--no-deps", "--force-recreate", "--wait", "operator")
             restored = call("operator", url, token=owner)
             assert restored["event"] == terminal["event"] and restored["settlement"] is None
-            run("up", "-d", "--wait", "settlement")
+            run("up", "-d", "--no-build", "--wait", "settlement")
             settled = wait_for(lambda: call("operator", url, token=owner), lambda row: row["settlement"] is not None)
             assert settled["settlement"]["status"] == "accepted"
             # Simulate the HTTP response having been lost after the adapter committed.
             run("exec", "-T", "operator", "python", "-c",
                 "import sqlite3; db=sqlite3.connect('/state/operator.sqlite3'); db.execute('UPDATE leases SET settlement=NULL'); db.commit()")
-            run("up", "-d", "--no-deps", "--force-recreate", "--wait", "operator", "settlement")
+            run("up", "-d", "--no-build", "--no-deps", "--force-recreate", "--wait", "operator", "settlement")
             replayed = wait_for(lambda: call("operator", url, token=owner), lambda row: row["settlement"] is not None)
             assert replayed["settlement"] == settled["settlement"]
             count = run("exec", "-T", "settlement", "python", "-c",
