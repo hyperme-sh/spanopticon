@@ -1,10 +1,12 @@
 """Offline command contracts; no container engine or shared fixtures."""
+import ast
+import inspect
 import copy
 import json
 import subprocess
 import unittest
 from unittest.mock import Mock, patch
-from examples.operator.check_sample import inspect_service_image
+from examples.operator.check_sample import inspect_service_image, main
 
 class ImageIdentityTests(unittest.TestCase):
     def setUp(self):
@@ -47,3 +49,22 @@ class ImageIdentityTests(unittest.TestCase):
         self.container["Image"] = "moving-tag"
         with patch("subprocess.check_output", return_value=json.dumps([self.container])) as command, self.assertRaises(ValueError): self.inspect()
         self.assertEqual(command.call_count, 1)
+
+    def test_sample_builds_all_images_before_starting_without_rebuilds(self):
+        tree = ast.parse(inspect.getsource(main))
+        commands = []
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "run":
+                args = [arg.value for arg in node.args if isinstance(arg, ast.Constant)]
+                commands.append((node.lineno, args))
+        commands.sort()
+        builds = [(line, args) for line, args in commands if "build" in args]
+        self.assertEqual(len(builds), 1)
+        self.assertEqual(set(builds[0][1][3:]), {"identity", "operator", "settlement", "host"})
+        starts = [(line, args) for line, args in commands if "up" in args]
+        self.assertTrue(starts)
+        for line, args in starts:
+            self.assertLess(builds[0][0], line)
+            self.assertIn("--no-build", args)
+        literals = {node.value for node in ast.walk(tree) if isinstance(node, ast.Constant) and isinstance(node.value, str)}
+        self.assertNotIn("--build", literals)
