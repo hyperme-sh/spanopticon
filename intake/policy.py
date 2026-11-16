@@ -45,7 +45,7 @@ class Reconcile(Input):
 EXCERPT = re.compile(
     r"(?is)\b(?:prompt(?: body)?|file contents?|clipboard|conversation|source code)\s*:.*\Z"
 )
-SECRET_FIELD = r"""(?ix)["']?\b(?:password|api[_ -]?key|(?:access_|refresh_)?token|client_secret|secret|credential|private_key|serial(?:[ _-]number)?|prompt(?:[ _-]body)?|file(?:[ _-]contents?)?|clipboard|conversation|source[ _-]code)\b["']?\s*[:=]\s*(?:"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|[^\s,;}]+)"""
+SECRET_FIELD = r"""(?ix)["']?\b(?:password|passphrase|passwd|api[_ -]?key|(?:(?:access|refresh|auth|id)[_ -]?)?token|client[_ -]?secret|secret(?:[_ -]?key)?|credential|private[_ -]?key|serial(?:[ _-]number)?|prompt(?:[ _-]body)?|file(?:[ _-]contents?)?|clipboard|conversation|source[ _-]code)\b["']?\s*[:=]\s*(?:"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|[^\r\n]+)"""
 
 REDACTIONS = [
     (

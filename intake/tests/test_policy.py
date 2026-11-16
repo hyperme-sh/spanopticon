@@ -138,6 +138,14 @@ class PolicyTests(unittest.TestCase):
             "secret",
             "prompt",
             "file_contents",
+            "accessToken",
+            "refreshToken",
+            "clientSecret",
+            "privateKey",
+            "secretKey",
+            "apiKey",
+            "access-token",
+            "client secret",
         ):
             for value in (
                 "opaque-sensitive-value",
@@ -158,3 +166,13 @@ class PolicyTests(unittest.TestCase):
         self.assertNotIn(
             "sensitive", policy.scrub("password='multiword sensitive value'")
         )
+
+    def test_unterminated_or_unquoted_multiword_credentials_are_removed(self):
+        for raw in (
+            'password="multiword sensitive value',
+            "privateKey='multiword sensitive value",
+            "clientSecret=multiword sensitive value",
+        ):
+            clean = policy.scrub(raw)
+            self.assertNotIn("sensitive", clean)
+            self.assertEqual(policy.scrub(clean), clean)
