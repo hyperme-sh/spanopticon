@@ -47,5 +47,8 @@ class DeviceTransfer(unittest.TestCase):
     def test_generation_is_exclusive_and_has_no_owner_side_effects(self):
         with tempfile.TemporaryDirectory() as root:
             target=Path(root)/'output';write(configuration(),target)
+            overlay=json.loads((target/'compose.override.json').read_text())
+            self.assertEqual(overlay['services']['auth-service']['volumes'][0]['source'],str(target/'scopes.json'))
+            self.assertFalse(overlay['services']['acl-service']['volumes'][0]['bind']['create_host_path'])
             self.assertEqual({p.name for p in target.iterdir()},{'compose.override.json','scopes.json','capabilities.json'})
             with self.assertRaises(FileExistsError):write(configuration(),target)

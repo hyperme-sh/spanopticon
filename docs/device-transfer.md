@@ -22,12 +22,10 @@ tenant is inferred from a browser request. Up to eight total scopes match Auth's
 current bound; s3r.ch supports one scope and the portal supports several tenants.
 
 The overlay augments existing `auth-service`, `acl-service`, `controlplane-edge`,
-`controlplane-portal` and optional `s3rch` services. Merge it with the existing base
-using the generated directory as Compose's project directory so `./scopes.json`
-resolves there. Do not run the overlay alone. Base services retain moving TEST
+`controlplane-portal` and optional `s3rch` services. Merge it with the existing base using `-f BASE -f GENERATED/compose.override.json`.
+The writer makes the scope mount absolute, preserving the base project directory. Do not run the overlay alone. Base services retain moving TEST
 image channels, owner URLs, health checks, databases and native login. No image
-version/digest or matching peer build is inserted. The skill's generic image-pin
-advice is superseded by the owner's moving-channel policy.
+version/digest or matching peer build is inserted.
 
 Auth's existing environment file supplies DATABASE_URL; install the Auth-owned
 pairing migration with its existing migration command before enabling the config.

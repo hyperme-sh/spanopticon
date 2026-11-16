@@ -30,6 +30,10 @@ def private_path(value):
     return value
 
 
+def mount(source, target):
+    return {'type': 'bind', 'source': source, 'target': target, 'read_only': True, 'bind': {'create_host_path': False}}
+
+
 def compile_config(value):
     exact(value, 'version edgeOrigin clients crossApplicationPairs ownerFiles')
     if type(value['version']) is not int or value['version'] != 1 or value['crossApplicationPairs'] != []:
@@ -68,9 +72,9 @@ def compile_config(value):
             s3rch = dict(v=1, **binding, provider=client['provider'])
     shared = {'version': 1, 'scopes': scopes}
     services = {
-        'auth-service': {'env_file': [files['authEnvironment']], 'environment': {'AUTH_SEA_PAIRING_SCOPES_FILE': '/run/device-transfer/scopes.json'}, 'volumes': ['./scopes.json:/run/device-transfer/scopes.json:ro']},
-        'controlplane-edge': {'environment': {'CPEDGE_DEVICE_TRANSFER_SCOPES_FILE': '/run/device-transfer/scopes.json'}, 'volumes': ['./scopes.json:/run/device-transfer/scopes.json:ro']},
-        'acl-service': {'environment': {'SOCIACL_DEVICE_TRANSFER_BINDINGS_FILE': '/run/device-transfer-private/bindings.json'}, 'volumes': [files['aclPrivateDirectory']+':/run/device-transfer-private:ro']},
+        'auth-service': {'env_file': [files['authEnvironment']], 'environment': {'AUTH_SEA_PAIRING_SCOPES_FILE': '/run/device-transfer/scopes.json'}, 'volumes': [mount('./scopes.json', '/run/device-transfer/scopes.json')]},
+        'controlplane-edge': {'environment': {'CPEDGE_DEVICE_TRANSFER_SCOPES_FILE': '/run/device-transfer/scopes.json'}, 'volumes': [mount('./scopes.json', '/run/device-transfer/scopes.json')]},
+        'acl-service': {'environment': {'SOCIACL_DEVICE_TRANSFER_BINDINGS_FILE': '/run/device-transfer-private/bindings.json'}, 'volumes': [mount(files['aclPrivateDirectory'], '/run/device-transfer-private')]},
     }
     if portal:
         services['controlplane-portal'] = {'environment': {'PORTAL_DEVICE_TRANSFER_CONFIG': json.dumps(dict(v=1, origin=portal_origin, bindings=portal), separators=(',', ':'))}}
@@ -85,7 +89,12 @@ def compile_config(value):
 
 def write(value, output):
     generated = compile_config(value)
-    output = Path(output)
+    output = Path(output).absolute()
+    private_path(str(output))
+    for service in generated['compose.override.json']['services'].values():
+        for volume in service.get('volumes', []):
+            if volume['source'] == './scopes.json':
+                volume['source'] = str(output/'scopes.json')
     output.mkdir(mode=0o700)
     for name, body in generated.items():
         with (output/name).open('x') as stream:
