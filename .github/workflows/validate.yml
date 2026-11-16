@@ -32,6 +32,8 @@ jobs:
           for path in scripts/component_release.py release/accepted.py release/policy.py; do
             git show "$policy_ref:$path" | cmp - "$path"
           done
+      - name: Validate additive device transfer configuration
+        run: python3 scripts/check-device-transfer-compose.py
       - name: Validate generated Compose configuration
         run: |
           python3 scripts/new_plane.py example --repository registry.example.org/team/plane --image registry.example.org/team/plane:test --assurance-config examples/assurance/kyc.json --output "$RUNNER_TEMP/plane-example"
