@@ -1,0 +1,14 @@
+{
+  "enabled": false,
+  "publish_enabled": false,
+  "issuer": "https://identity.example.test/realms/operator",
+  "audience": "feedback-intake",
+  "algorithm": "RS256",
+  "tenants": {
+    "10000000-0000-4000-8000-000000000001": {
+      "web": "example/hypermesh",
+      "visor": "example/visor",
+      "host": "example/host"
+    }
+  }
+}

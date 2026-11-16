@@ -1,0 +1,100 @@
+import unittest
+from unittest.mock import patch
+from pydantic import ValidationError
+from intake import policy
+from intake.__main__ import bind_address
+
+
+def submission(**overrides):
+    return policy.Submission(
+        **(
+            dict(
+                consent_revision=1,
+                category="bug",
+                component="web",
+                title="Button not working",
+                body="The save button remains disabled after selecting an option.",
+                preview_confirmed=True,
+            )
+            | overrides
+        )
+    )
+
+
+class PolicyTests(unittest.TestCase):
+    def test_allowlist_rejects_attachments_and_prompt_fields(self):
+        for key in (
+            "prompt",
+            "file",
+            "attachment",
+            "tenant_id",
+            "repository",
+            "contact",
+            "github_token",
+        ):
+            with self.subTest(key=key), self.assertRaises(ValidationError):
+                submission(**{key: "private"})
+
+    def test_consent_preview_and_limits(self):
+        for fields in (
+            {"preview_confirmed": False},
+            {"consent_revision": 0},
+            {"body": "x" * 4001},
+            {"component": "../repo"},
+        ):
+            with self.subTest(fields=fields), self.assertRaises(ValidationError):
+                submission(**fields)
+
+    def test_canaries_are_removed_before_storage(self):
+        original = "Contact alice@example.com token=secrettoken 192.168.1.22 +1 (212) 555-1212 /home/alice/key https://example.com/?secret=abc @someone\n```file-private-content```\nprompt: prompt-private-content"
+        clean = policy.scrub(original)
+        for secret in (
+            "alice",
+            "secrettoken",
+            "192.168",
+            "555-1212",
+            "?secret",
+            "@someone",
+            "file-private-content",
+            "prompt-private-content",
+        ):
+            self.assertNotIn(secret, clean)
+
+    def test_unclosed_code_block_is_removed(self):
+        self.assertNotIn("private", policy.scrub("description\n```private"))
+
+    def test_scrubbing_is_stable_at_external_boundary(self):
+        value = policy.scrub("Email alice@example.com and password=secret")
+        self.assertEqual(value, policy.scrub(value))
+
+    def test_tenant_independent_hash_does_not_store_raw_pii(self):
+        a = policy.prepare(submission(body="The button failed for alice@example.com"))
+        b = policy.prepare(submission(body="The button failed for bob@example.com"))
+        self.assertEqual(a[2], b[2])
+        self.assertNotIn("alice", a[1])
+
+    def test_spam_is_dispositioned_before_review(self):
+        self.assertTrue(
+            policy.prepare(submission(body="visit " + "https://spam.test " * 5))[3]
+        )
+        self.assertTrue(policy.prepare(submission(body="a" * 80))[3])
+        self.assertFalse(policy.prepare(submission())[3])
+
+    def test_private_binding(self):
+        self.assertEqual(bind_address("127.0.0.1"), "127.0.0.1")
+        for address in ("0.0.0.0", "::", "192.168.1.1"):
+            with self.assertRaises(ValueError):
+                bind_address(address)
+        with patch(
+            "intake.__main__.subprocess.check_output",
+            return_value=b'[{"linkinfo":{"info_kind":"wireguard"},"addr_info":[{"local":"10.2.0.1"}]}]',
+        ):
+            self.assertEqual(bind_address("10.2.0.1", "wg0"), "10.2.0.1")
+            with self.assertRaises(ValueError):
+                bind_address("10.2.0.2", "wg0")
+        with patch(
+            "intake.__main__.subprocess.check_output",
+            return_value=b'[{"linkinfo":{"info_kind":"ether"},"addr_info":[{"local":"10.2.0.1"}]}]',
+        ):
+            with self.assertRaises(ValueError):
+                bind_address("10.2.0.1", "eth0")

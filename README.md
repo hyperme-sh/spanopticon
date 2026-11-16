@@ -60,3 +60,8 @@ are rejected. Patch releases still require identical contracts. Consumer tests
 remain necessary; byte compatibility does not establish live provider behavior.
 
 The [minimum bundle](profiles/minimum/README.md) includes a tenant-scoped reference API, Python client, local test issuer, and Compose and Helm installation instructions.
+
+The default-off [human feedback intake](intake/README.md) provides machine-authenticated,
+tenant-scoped PostgreSQL submission, consent, review, retention and privacy-request
+APIs. GitHub forwarding requires an explicit human disposition and separately
+configured installation credentials; client controls remain with Hypermesh #79.
