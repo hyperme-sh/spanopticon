@@ -23,10 +23,11 @@ def command(args, **kwargs):
 def owner_token_scope(value,document):
     # Public gateway downloads keep their proven coordinator job token path.
     if value['owner']!='hypermesh-plane':return
+    repo, repo_id = image.SOURCE_REPOSITORIES[value['owner']]
     repositories=document.get('repositories',[])
     b.require(document.get('total_count')==1 and len(repositories)==1
-              and repositories[0].get('full_name')=='hyperme-sh/hypermesh-plane',
-              'Artifact token must be scoped only to hyperme-sh/hypermesh-plane')
+              and repositories[0].get('full_name') == repo and repositories[0].get('id') == repo_id,
+              'Artifact token must be scoped only to hyperme-sh/plane')
 
 
 def download(value,output):
@@ -49,7 +50,7 @@ def download(value,output):
         receipt=image.verify(value,output/'image.tar')
         (output/'verified.json').write_text(json.dumps(receipt)+'\n')
         return receipt
-    repo='hyperme-sh/'+value['owner']
+    repo, _ = image.SOURCE_REPOSITORIES[value['owner']]
     def get(path):
         return b.document(command(['gh','api','repos/'+repo+path],stdout=subprocess.PIPE))
     image.provenance(value,get('/actions/runs/'+str(value['run_id'])),get('/actions/artifacts/'+str(value['artifact_id'])))

@@ -61,6 +61,16 @@ class ComponentReleaseTest(unittest.TestCase):
             with self.subTest(repo=repo, line=line), self.assertRaises(ValueError):
                 module.configuration(self.current, repo, line)
 
+    def test_renamed_owners_keep_their_release_component_ids(self):
+        path = self.current / 'release-policy.json'
+        config = json.loads(path.read_text())
+        for repo in ('plane', 'gateway', 'orchestrator'):
+            with self.subTest(repo=repo):
+                renamed = dict(config, repository=f'hyperme-sh/{repo}', component=f'hypermesh-{repo}')
+                path.write_text(json.dumps(renamed))
+                actual, _ = module.configuration(self.current, renamed['repository'], '0.24')
+                self.assertEqual(actual['component'], f'hypermesh-{repo}')
+
     def test_version_source_cannot_escape_checkout(self):
         config = json.loads((self.current / 'release-policy.json').read_text())
         config['version_files'] = ['../outside/pyproject.toml']

@@ -57,13 +57,25 @@ class OwnerImageTests(unittest.TestCase):
         with self.archive.open('ab') as stream:stream.write(b'x')
         with self.assertRaisesRegex(ValueError,'archive digest'):image.verify(self.value,self.archive)
 
+    def test_owner_provenance_binds_the_original_repository_id(self):
+        repo = {'id': 1439103692, 'full_name': 'hyperme-sh/gateway'}
+        run = dict(id=1, head_sha='a'*40, head_branch='main', event='push',
+                   path='.github/workflows/package.yml', status='completed', conclusion='success',
+                   repository=repo, head_repository=repo)
+        artifact = dict(id=2, name='tested-runtime-image', expired=False, digest='sha256:'+'b'*64,
+                        workflow_run=dict(id=1, head_sha='a'*40, head_branch='main',
+                                          repository_id=repo['id'], head_repository_id=repo['id']))
+        image.provenance(self.value, run, artifact)
+        with self.assertRaisesRegex(ValueError, 'source repository mismatch'):
+            image.provenance(self.value, dict(run, head_repository=dict(repo, id=4)), artifact)
+
     def test_wrong_destination_rejected(self):
         self.value['destination']='ghcr.io/other/image'
         with self.assertRaisesRegex(ValueError,'destination'):image.pin(self.value)
 
     def test_private_plane_artifact_rejected(self):
         value={**self.value,'owner':'hypermesh-plane','destination':'ghcr.io/hyperme-sh/spanopticon-hypermesh-plane'}
-        repo={'id':4,'full_name':'hyperme-sh/hypermesh-plane'}
+        repo={'id':4,'full_name':'hyperme-sh/plane'}
         run=dict(id=1,head_sha='a'*40,head_branch='main',event='push',path='.github/workflows/service.yml',status='completed',conclusion='success',repository=repo,head_repository=repo)
         with self.assertRaisesRegex(ValueError,'qualification'):image.provenance(value,run,{})
 
@@ -88,10 +100,11 @@ class OwnerImageTests(unittest.TestCase):
         spec=importlib.util.spec_from_file_location('owner_cli',Path(__file__).parents[1]/'scripts/owner_image.py')
         cli=importlib.util.module_from_spec(spec);spec.loader.exec_module(cli)
         value={**self.value,'owner':'hypermesh-plane'}
-        plane={'full_name':'hyperme-sh/hypermesh-plane'}
+        plane={'id':1439103613,'full_name':'hyperme-sh/plane'}
         cli.owner_token_scope(value,{'total_count':1,'repositories':[plane]})
         for data in ({}, {'total_count':2,'repositories':[plane]},
                      {'total_count':1,'repositories':[{'full_name':'hyperme-sh/other'}]},
+                     {'total_count':1,'repositories':[dict(plane, id=4)]},
                      {'total_count':1,'repositories':[plane,plane]}):
             with self.subTest(data=data), self.assertRaisesRegex(ValueError,'scoped only'):
                 cli.owner_token_scope(value,data)
