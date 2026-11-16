@@ -52,3 +52,13 @@ class DeviceTransfer(unittest.TestCase):
             self.assertFalse(overlay['services']['acl-service']['volumes'][0]['bind']['create_host_path'])
             self.assertEqual({p.name for p in target.iterdir()},{'compose.override.json','scopes.json','capabilities.json'})
             with self.assertRaises(FileExistsError):write(configuration(),target)
+
+    def test_browser_origin_canonicalization_and_colon_mount(self):
+        for bad in ('https://portal.example:443','https://127.1','https://0177.0.0.1','https://0x7f000001','https://portal.example.','https://bad-.example'):
+            value=configuration();value['clients'][0]['origin']=bad
+            with self.subTest(origin=bad),self.assertRaises(ValueError):compile_config(value)
+        value=configuration();value['ownerFiles']['aclPrivateDirectory']='/private/acl:current'
+        volume=compile_config(value)['compose.override.json']['services']['acl-service']['volumes'][0]
+        self.assertEqual(volume['source'],'/private/acl:current')
+        self.assertEqual(volume['target'],'/run/device-transfer-private')
+        self.assertTrue(volume['read_only'])

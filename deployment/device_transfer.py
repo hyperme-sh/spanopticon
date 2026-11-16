@@ -1,5 +1,6 @@
 """Generate an additive configuration overlay for existing SEA transfer owners."""
 import argparse
+import ipaddress
 import json
 from pathlib import Path
 import re
@@ -19,8 +20,14 @@ def origin(value):
     if not isinstance(value, str) or not re.fullmatch(r'https://[a-z0-9.-]+(?::[1-9][0-9]{0,4})?', value):
         raise ValueError('Canonical HTTPS origin required')
     parsed = urlsplit(value)
-    if not parsed.hostname or parsed.port and parsed.port > 65535:
-        raise ValueError('Invalid origin')
+    host = parsed.hostname
+    if not host or parsed.port == 443 or parsed.port and parsed.port > 65535:
+        raise ValueError('Noncanonical origin')
+    if re.fullmatch(r'[0-9]+|0x[0-9a-f]+', host.rsplit('.', 1)[-1]):
+        if str(ipaddress.IPv4Address(host)) != host:
+            raise ValueError('Noncanonical IP origin')
+    elif len(host) > 253 or any(not re.fullmatch(r'[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?', label) for label in host.split('.')):
+        raise ValueError('Noncanonical DNS origin')
     return value
 
 
