@@ -60,3 +60,23 @@ class TenantCatalogTest(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, "Duplicate"):
                     render(self.catalog)
                 login.update(original)
+
+    def test_peer_listener_references_and_pins(self):
+        tenant = self.catalog['tenants'][0]
+        tenant['network'] = 'hyperme.sh'
+        tenant['plane'] = dict(environment='test', repository='hyperme-sh/hypermesh-plane', version='0.2.0', protocol_version=1)
+        tenant['peers'] = [dict(url='https://peer.invalid', public_key='AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=', plane=tenant['plane'])]
+        listener = dict(bind='127.0.0.1', port=8443, cert_file='/run/secrets/peer.crt', key_file='/run/secrets/peer.key', ca_file='/run/secrets/peer-ca.crt')
+        tenant['peer_listener'] = listener
+        files = render(self.catalog)[tenant['id']]
+        self.assertEqual(files['peer-listener.json'], dict(schema_version=1, tenant_id=tenant['id'], peer_pins=[tenant['peers'][0]['public_key']], **listener))
+        self.assertNotIn('BEGIN PRIVATE KEY', json.dumps(files))
+        for field, bad in [('key_file','-----BEGIN PRIVATE KEY-----'), ('cert_file','relative.crt'), ('ca_file','/run/../key'), ('port',True), ('port',443), ('bind','example.test')]:
+            with self.subTest(field=field), self.assertRaises(ValueError):
+                tenant['peer_listener'] = dict(listener, **{field: bad})
+                render(self.catalog)
+        tenant['peer_listener'] = listener
+        for url in ['http://peer.invalid','https://peer.invalid/path']:
+            with self.subTest(url=url), self.assertRaises(ValueError):
+                tenant['peers'][0]['url'] = url
+                render(self.catalog)
