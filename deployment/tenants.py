@@ -2,6 +2,7 @@
 import argparse
 import base64
 import json
+import ipaddress
 from pathlib import Path
 import re
 from urllib.parse import urlsplit
@@ -63,7 +64,7 @@ def render(catalog):
                 raise ValueError("Peer requires URL, public key and plane compatibility declaration")
             if plane is None or compatibility_line(peer["plane"]) != compatibility_line(plane):
                 raise ValueError("Incompatible peer plane")
-            https(peer["url"])
+            https(peer["url"], origin=True)
             key = base64.b64decode(peer["public_key"], validate=True)
             if len(key) != 32 or key in keys:
                 raise ValueError("Expected a unique 32-byte peer public key")
@@ -73,6 +74,24 @@ def render(catalog):
             outputs[uid]["plane.json"]["network"] = tenant["network"]
         if plane is not None:
             outputs[uid]["plane.json"]["plane"] = plane
+        listener = tenant.get("peer_listener")
+        if listener is not None:
+            if set(listener) != {"bind", "port", "cert_file", "key_file", "ca_file"}:
+                raise ValueError("Expected peer listener address and secret file references")
+            if plane is None or not tenant.get("network"):
+                raise ValueError("Peer listener requires plane and network declarations")
+            ipaddress.ip_address(listener["bind"])
+            if type(listener["port"]) is not int or not 1024 <= listener["port"] <= 65535:
+                raise ValueError("Expected unprivileged listener port")
+            for field in ("cert_file", "key_file", "ca_file"):
+                path = listener[field]
+                if (not isinstance(path, str) or not re.fullmatch(r"/[A-Za-z0-9_./-]+", path)
+                    or ".." in Path(path).parts or path.endswith("/")):
+                    raise ValueError("Expected absolute secret file reference")
+            outputs[uid]["peer-listener.json"] = {
+                "schema_version": 1, "tenant_id": uid, **listener,
+                "peer_pins": sorted(peer["public_key"] for peer in peers),
+            }
         login = tenant.get("login")
         if login is None:
             continue
