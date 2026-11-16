@@ -25,8 +25,8 @@ def owner_token_scope(value,document):
     if value['owner']!='hypermesh-plane':return
     repositories=document.get('repositories',[])
     b.require(document.get('total_count')==1 and len(repositories)==1
-              and repositories[0].get('full_name')=='hyperme-sh/hypermesh-plane',
-              'Artifact token must be scoped only to hyperme-sh/hypermesh-plane')
+              and repositories[0].get('full_name')=='hyperme-sh/plane',
+              'Artifact token must be scoped only to hyperme-sh/plane')
 
 
 def download(value,output):

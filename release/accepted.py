@@ -78,8 +78,13 @@ def github_asset(repository, asset_id):
         raise PolicyError("Unable to verify published container provenance") from None
 
 
-# Ticket keeps the component ID used by its immutable release bundles.
-FORMER_REPOSITORIES = {"hyperme-sh/ticket": "hyperme-sh/hypermesh-ticket"}
+# Renamed repositories retain their release component IDs and recorded provenance.
+FORMER_REPOSITORIES = {
+    "hyperme-sh/ticket": "hyperme-sh/hypermesh-ticket",
+    "hyperme-sh/plane": "hyperme-sh/hypermesh-plane",
+    "hyperme-sh/gateway": "hyperme-sh/hypermesh-gateway",
+    "hyperme-sh/orchestrator": "hyperme-sh/hypermesh-orchestrator",
+}
 
 
 def component_name(repository):

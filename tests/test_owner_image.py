@@ -63,7 +63,7 @@ class OwnerImageTests(unittest.TestCase):
 
     def test_private_plane_artifact_rejected(self):
         value={**self.value,'owner':'hypermesh-plane','destination':'ghcr.io/hyperme-sh/spanopticon-hypermesh-plane'}
-        repo={'id':4,'full_name':'hyperme-sh/hypermesh-plane'}
+        repo={'id':4,'full_name':'hyperme-sh/plane'}
         run=dict(id=1,head_sha='a'*40,head_branch='main',event='push',path='.github/workflows/service.yml',status='completed',conclusion='success',repository=repo,head_repository=repo)
         with self.assertRaisesRegex(ValueError,'qualification'):image.provenance(value,run,{})
 
@@ -88,7 +88,7 @@ class OwnerImageTests(unittest.TestCase):
         spec=importlib.util.spec_from_file_location('owner_cli',Path(__file__).parents[1]/'scripts/owner_image.py')
         cli=importlib.util.module_from_spec(spec);spec.loader.exec_module(cli)
         value={**self.value,'owner':'hypermesh-plane'}
-        plane={'full_name':'hyperme-sh/hypermesh-plane'}
+        plane={'full_name':'hyperme-sh/plane'}
         cli.owner_token_scope(value,{'total_count':1,'repositories':[plane]})
         for data in ({}, {'total_count':2,'repositories':[plane]},
                      {'total_count':1,'repositories':[{'full_name':'hyperme-sh/other'}]},
