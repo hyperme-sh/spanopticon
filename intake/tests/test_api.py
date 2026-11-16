@@ -115,3 +115,62 @@ class ApiTests(unittest.TestCase):
         )
         self.assertEqual(response.status_code, 422)
         self.store.erase.assert_not_called()
+
+
+class MaintenanceTests(unittest.IsolatedAsyncioTestCase):
+    async def test_one_tenant_failure_does_not_skip_other_tenants(self):
+        from types import SimpleNamespace
+        from unittest.mock import patch
+
+        store = Mock()
+        store.purge.side_effect = [TimeoutError("busy"), None, None]
+        application = SimpleNamespace(
+            state=SimpleNamespace(
+                store=store,
+                config={
+                    "tenants": {"a": {}, "b": {}, "c": {}},
+                    "publish_enabled": False,
+                },
+                expiry_ok=True,
+            )
+        )
+        with patch.dict("os.environ", {}, clear=True):
+            await service.maintenance(application)
+        self.assertEqual(
+            [c.args[0] for c in store.purge.call_args_list], ["a", "b", "c"]
+        )
+        self.assertFalse(application.state.expiry_ok)
+
+    async def test_provider_failure_does_not_skip_local_expiry(self):
+        from types import SimpleNamespace
+        from unittest.mock import patch
+
+        calls = []
+        store = Mock()
+        store.purge.side_effect = lambda tenant: calls.append(("purge", tenant))
+
+        def cleanup(tenant, adapter):
+            calls.append(("cleanup", tenant))
+            if tenant == "a":
+                raise TimeoutError()
+
+        store.cleanup_destinations.side_effect = cleanup
+        application = SimpleNamespace(
+            state=SimpleNamespace(
+                store=store,
+                config={
+                    "tenants": {
+                        "a": {"web": "example/app"},
+                        "b": {"web": "example/app"},
+                    },
+                    "publish_enabled": True,
+                },
+                expiry_ok=True,
+            )
+        )
+        with patch.dict("os.environ", {"GITHUB_INSTALLATION_TOKEN_FILE": "unused"}):
+            await service.maintenance(application)
+        self.assertEqual(
+            calls, [("purge", "a"), ("purge", "b"), ("cleanup", "a"), ("cleanup", "b")]
+        )
+        self.assertFalse(application.state.expiry_ok)

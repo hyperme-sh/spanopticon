@@ -39,6 +39,30 @@ def configuration():
     return cfg
 
 
+async def maintenance(application):
+    healthy = True
+    # Finish local expiry for every tenant before external provider work.
+    for tenant in application.state.config["tenants"]:
+        try:
+            await asyncio.to_thread(application.state.store.purge, tenant)
+        except Exception:
+            healthy = False
+    application.state.expiry_ok = healthy
+    if application.state.config.get("publish_enabled", False) and os.environ.get(
+        "GITHUB_INSTALLATION_TOKEN_FILE"
+    ):
+        for tenant, routes in application.state.config["tenants"].items():
+            try:
+                adapter = GitHub(
+                    os.environ["GITHUB_INSTALLATION_TOKEN_FILE"], set(routes.values())
+                )
+                await asyncio.to_thread(
+                    application.state.store.cleanup_destinations, tenant, adapter
+                )
+            except Exception:
+                application.state.expiry_ok = False
+
+
 @asynccontextmanager
 async def lifespan(app):
     app.state.config = configuration()
@@ -50,24 +74,7 @@ async def lifespan(app):
 
     async def sweep():
         while True:
-            for tenant in app.state.config["tenants"]:
-                try:
-                    await asyncio.to_thread(app.state.store.purge, tenant)
-                    if app.state.config.get(
-                        "publish_enabled", False
-                    ) and os.environ.get("GITHUB_INSTALLATION_TOKEN_FILE"):
-                        adapter = GitHub(
-                            os.environ["GITHUB_INSTALLATION_TOKEN_FILE"],
-                            set(app.state.config["tenants"][tenant].values()),
-                        )
-                        await asyncio.to_thread(
-                            app.state.store.cleanup_destinations, tenant, adapter
-                        )
-                except Exception:
-                    app.state.expiry_ok = False
-                    break
-            else:
-                app.state.expiry_ok = True
+            await maintenance(app)
             await asyncio.sleep(60)
 
     # Apply expiry before admitting requests, including after a restart.

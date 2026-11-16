@@ -98,3 +98,27 @@ class PolicyTests(unittest.TestCase):
         ):
             with self.assertRaises(ValueError):
                 bind_address("10.2.0.1", "eth0")
+
+    def test_authorization_schemes_and_cookie_lists_are_removed(self):
+        for header in (
+            "Authorization: Bearer opaque-sensitive-access-value",
+            "Authorization: Basic YWxpY2U6cHJpdmF0ZS1wYXNzd29yZA==",
+            'Proxy-Authorization: Digest username="alice", response="secret"',
+            '"Authorization": "Bearer opaque-sensitive-access-value"',
+            "Cookie: first=secret; second=another-secret",
+        ):
+            with self.subTest(header=header):
+                clean = policy.scrub(
+                    "Report description\n" + header + "\nContinue description"
+                )
+                self.assertEqual(
+                    clean, "Report description\n[secret removed]\nContinue description"
+                )
+                self.assertEqual(policy.scrub(clean), clean)
+
+    def test_inline_prompt_and_file_labels_remove_the_excerpt(self):
+        for label in ("prompt:", "prompt body:", "file contents:"):
+            self.assertNotIn(
+                "private-canary",
+                policy.scrub("The failure involved " + label + " private-canary"),
+            )

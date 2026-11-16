@@ -26,7 +26,7 @@ CREATE TABLE feedback.report (
  title text NOT NULL, body text NOT NULL, fingerprint text NOT NULL,
  state text NOT NULL CHECK(state IN ('pending','spam','duplicate','accepted','rejected','publishing','published','unknown','deleted')),
  created_at timestamptz NOT NULL DEFAULT now(), expires_at timestamptz NOT NULL,
- closed_at timestamptz, issue_number bigint, external_pending boolean NOT NULL DEFAULT false,
+ closed_at timestamptz, issue_number bigint, cleanup_after timestamptz NOT NULL DEFAULT now(), external_pending boolean NOT NULL DEFAULT false,
  PRIMARY KEY(tenant,id), UNIQUE(tenant,issuer,subject,device,request_id),
  FOREIGN KEY(tenant,issuer,subject) REFERENCES feedback.member(tenant,issuer,subject)
 );

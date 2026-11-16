@@ -43,9 +43,14 @@ class Reconcile(Input):
 # Never persist or echo the original payload. Known excerpt containers are
 # removed as a whole, not merely their labels. No automatic attachments exist.
 EXCERPT = re.compile(
-    r"(?is)(?:^|\n)\s*(?:prompt|file contents?|clipboard|conversation|source code)\s*:.*\Z"
+    r"(?is)\b(?:prompt(?: body)?|file contents?|clipboard|conversation|source code)\s*:.*\Z"
 )
 REDACTIONS = [
+    (
+        r"(?im)[\"']?\b(?:proxy-)?authorization[\"']?\s*[:=]\s*[^\r\n]+",
+        "[secret removed]",
+    ),
+    (r"(?im)[\"']?\b(?:set-)?cookie[\"']?\s*[:=]\s*[^\r\n]+", "[secret removed]"),
     (r"(?s)```.*?(?:```|\Z)", "[excerpt removed]"),
     (r"(?is)-----BEGIN [^-]*PRIVATE KEY-----.*", "[secret removed]"),
     (

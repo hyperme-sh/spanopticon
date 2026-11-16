@@ -297,6 +297,11 @@ class PostgresTests(unittest.TestCase):
         github.delete.side_effect = TimeoutError()
         self.store.cleanup_destinations(self.tenant, github)
         self.assertFalse(self.store.erase(self.owner)["complete"])
+        with self.store.transaction(self.tenant) as db:
+            db.execute(
+                "UPDATE feedback.report SET cleanup_after=now() WHERE tenant=%s",
+                (self.tenant,),
+            )
         github.delete.side_effect = None
         github.delete.return_value = True
         self.store.cleanup_destinations(self.tenant, github)
@@ -346,3 +351,43 @@ class PostgresTests(unittest.TestCase):
         self.assertEqual(
             self.store.reports(self.foreign, review=True, after=ordered[0]), []
         )
+
+    def test_failed_destinations_do_not_starve_later_requests(self):
+        from uuid import UUID
+
+        with self.store.transaction(self.tenant) as db:
+            for number in range(1, 12):
+                db.execute(
+                    """INSERT INTO feedback.report(tenant,id,issuer,subject,device,request_id,
+                    consent_revision,category,component,repository,title,body,fingerprint,state,expires_at,issue_number,external_pending)
+                    VALUES(%s,%s,%s,%s,%s,%s,1,'bug','web','example/app','','','','deleted',now(),%s,true)""",
+                    (
+                        self.tenant,
+                        UUID(int=number),
+                        self.owner.issuer,
+                        self.owner.subject,
+                        self.owner.device,
+                        uuid4(),
+                        number,
+                    ),
+                )
+        attempted = []
+
+        def remove(row):
+            attempted.append(row["issue_number"])
+            if row["issue_number"] <= 10:
+                raise ValueError("Changed marker")
+            return True
+
+        github = Mock()
+        github.delete.side_effect = remove
+        self.store.cleanup_destinations(self.tenant, github)
+        self.store.cleanup_destinations(self.tenant, github)
+        self.assertEqual(attempted, list(range(1, 12)))
+        with self.store.transaction(self.tenant) as db:
+            self.assertFalse(
+                db.execute(
+                    "SELECT external_pending FROM feedback.report WHERE tenant=%s AND issue_number IS NULL",
+                    (self.tenant,),
+                ).fetchone()["external_pending"]
+            )

@@ -437,15 +437,32 @@ class Store:
 
     def cleanup_destinations(self, tenant, github):
         with self.transaction(tenant) as db:
-            rows = db.execute(
-                "SELECT * FROM feedback.report WHERE tenant=%s AND state='deleted' AND external_pending AND issue_number IS NOT NULL ORDER BY id LIMIT 10",
+            ids = db.execute(
+                """SELECT id FROM feedback.report WHERE tenant=%s AND state='deleted'
+                AND external_pending AND issue_number IS NOT NULL AND cleanup_after<=now()
+                ORDER BY cleanup_after,id LIMIT 10""",
                 (tenant,),
             ).fetchall()
-            for row in rows:
+        for item in ids:
+            # Each attempt commits independently. Failed destinations move to
+            # a later retry slot instead of starving every later ID.
+            with self.transaction(tenant) as db:
+                row = db.execute(
+                    """SELECT * FROM feedback.report WHERE tenant=%s AND id=%s
+                    AND state='deleted' AND external_pending AND issue_number IS NOT NULL
+                    AND cleanup_after<=now() FOR UPDATE""",
+                    (tenant, item["id"]),
+                ).fetchone()
+                if row is None:
+                    continue
+                db.execute(
+                    "UPDATE feedback.report SET cleanup_after=now()+interval '5 minutes' WHERE tenant=%s AND id=%s",
+                    (tenant, row["id"]),
+                )
                 try:
                     confirmed = github.delete(row)
                 except Exception:
-                    continue  # Retain a visible, content-free unresolved destination.
+                    continue
                 if confirmed is True:
                     db.execute(
                         "UPDATE feedback.report SET external_pending=false,issue_number=NULL WHERE tenant=%s AND id=%s",
