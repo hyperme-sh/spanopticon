@@ -23,6 +23,11 @@ class Refusal(Exception):
 
 
 class Store:
+    CONSENT_SUBJECT_LIMIT = 2048
+    CONSENT_TENANT_LIMIT = 65536
+    CONSENT_SUBJECT_HOURLY = 20
+    CONSENT_TENANT_HOURLY = 1000
+
     def __init__(self, dsn):
         self.dsn = dsn
 
@@ -108,6 +113,49 @@ class Store:
                 ).fetchone()
             ):
                 raise Refusal(409, "Deletion blocks new intake")
+            if body.enabled == bool(row and row["enabled"]):
+                return {
+                    "enabled": body.enabled,
+                    "revision": revision,
+                    "notice": body.notice,
+                    "purpose": body.purpose,
+                }
+            if body.enabled:
+                # Reserve a history slot for withdrawal of every active grant.
+                # Withdrawals never consume more of this combined budget and
+                # remain available even when opt-in limits are exhausted.
+                for scope, params, limit, hourly in (
+                    (
+                        "tenant=%s AND issuer=%s AND subject=%s",
+                        args[:3],
+                        self.CONSENT_SUBJECT_LIMIT,
+                        self.CONSENT_SUBJECT_HOURLY,
+                    ),
+                    (
+                        "tenant=%s",
+                        args[:1],
+                        self.CONSENT_TENANT_LIMIT,
+                        self.CONSENT_TENANT_HOURLY,
+                    ),
+                ):
+                    counts = db.execute(
+                        "SELECT count(*) AS total, count(*) FILTER (WHERE enabled AND changed_at>now()-interval '1 hour') AS recent FROM feedback.consent_history WHERE "
+                        + scope,
+                        params,
+                    ).fetchone()
+                    active = db.execute(
+                        "SELECT count(*) AS n FROM feedback.consent WHERE enabled AND "
+                        + scope,
+                        params,
+                    ).fetchone()["n"]
+                    if (
+                        counts["total"] + active + 2 > limit
+                        or counts["recent"] >= hourly
+                    ):
+                        raise Refusal(
+                            429,
+                            "Consent opt-in limit reached; withdrawal remains available",
+                        )
             db.execute(
                 """INSERT INTO feedback.consent(tenant,issuer,subject,device,revision,enabled,notice,purpose)
                 VALUES(%s,%s,%s,%s,%s,%s,%s,%s) ON CONFLICT(tenant,issuer,subject,device)

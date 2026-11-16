@@ -144,3 +144,12 @@ explicit substitutions. PostgreSQL contracts run only in the dedicated CI job,
 using its disposable database and restricted runtime role; no shared resources
 or live GitHub writes are used. The job also builds the locked service image.
 Scheduled composed client coverage stays with Infra, separate from PR sign-off.
+
+Consent updates that preserve the current choice are no-ops. Opt-ins are limited
+to 20 per subject and 1,000 per tenant per hour. Retained consent history plus
+reserved withdrawal slots is capped at 2,048 per subject and 65,536 per tenant.
+Each active grant reserves its withdrawal slot; withdrawal remains available
+when opt-in limits are exhausted. Expiry frees history capacity.
+
+Recognized credential labels discard the remaining pasted excerpt, including
+multiline YAML or JSON values, before storage and again before forwarding.

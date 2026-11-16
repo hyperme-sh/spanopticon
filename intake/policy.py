@@ -45,14 +45,11 @@ class Reconcile(Input):
 EXCERPT = re.compile(
     r"(?is)\b(?:prompt(?: body)?|file contents?|clipboard|conversation|source code)\s*:.*\Z"
 )
-SECRET_FIELD = r"""(?ix)["']?\b(?:password|passphrase|passwd|api[_ -]?key|(?:(?:access|refresh|auth|id)[_ -]?)?token|client[_ -]?secret|secret(?:[_ -]?key)?|credential|private[_ -]?key|serial(?:[ _-]number)?|prompt(?:[ _-]body)?|file(?:[ _-]contents?)?|clipboard|conversation|source[ _-]code)\b["']?\s*[:=]\s*(?:"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|[^\r\n]+)"""
+# A recognized secret label discards the remaining excerpt, including multiline
+# YAML/JSON values. Guessing the end of an arbitrary pasted value is unsafe.
+SECRET_FIELD = r"""(?isx)["']?\b(?:password|passphrase|passwd|api[_ -]?key|(?:(?:access|refresh|auth|id)[_ -]?)?token|client[_ -]?secret|secret(?:[_ -]?key)?|credential|private[_ -]?key|(?:proxy-)?authorization|(?:set-)?cookie|serial(?:[ _-]number)?|prompt(?:[ _-]body)?|file(?:[ _-]contents?)?|clipboard|conversation|source[ _-]code)\b["']?\s*[:=]\s*.*\Z"""
 
 REDACTIONS = [
-    (
-        r"(?im)[\"']?\b(?:proxy-)?authorization[\"']?\s*[:=]\s*[^\r\n]+",
-        "[secret removed]",
-    ),
-    (r"(?im)[\"']?\b(?:set-)?cookie[\"']?\s*[:=]\s*[^\r\n]+", "[secret removed]"),
     (r"(?s)```.*?(?:```|\Z)", "[excerpt removed]"),
     (r"(?is)-----BEGIN [^-]*PRIVATE KEY-----.*", "[secret removed]"),
     (SECRET_FIELD, "[secret removed]"),

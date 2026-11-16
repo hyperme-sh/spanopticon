@@ -3,7 +3,7 @@
 from concurrent.futures import ThreadPoolExecutor
 import os
 import unittest
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 from uuid import uuid4
 import psycopg
 from psycopg.rows import dict_row
@@ -417,3 +417,43 @@ class PostgresTests(unittest.TestCase):
             ).fetchall()
         self.assertTrue(rows)
         self.assertTrue(all(row["expires_at"] == original for row in rows))
+
+    def test_consent_noops_and_bounded_history_preserve_withdrawal(self):
+        def change(p, enabled, revision):
+            return self.store.consent(
+                p,
+                Consent(
+                    enabled=enabled,
+                    expected_revision=revision,
+                    notice="human-reports-v1",
+                    purpose="product-feedback",
+                ),
+            )
+
+        for _ in range(5):
+            self.assertEqual(change(self.owner, True, 1)["revision"], 1)
+        self.assertEqual(len(self.store.export(self.owner)["consent"]), 1)
+        absent = Principal(
+            self.tenant, self.owner.issuer, self.owner.subject, "unused-device"
+        )
+        self.assertEqual(change(absent, False, 0)["revision"], 0)
+        self.assertEqual(len(self.store.export(self.owner)["consent"]), 1)
+        for field, limit in (
+            ("CONSENT_SUBJECT_LIMIT", 2),
+            ("CONSENT_TENANT_LIMIT", 4),
+            ("CONSENT_SUBJECT_HOURLY", 1),
+            ("CONSENT_TENANT_HOURLY", 2),
+        ):
+            with self.subTest(field=field), patch.object(self.store, field, limit):
+                with self.assertRaises(Refusal) as raised:
+                    change(absent, True, 0)
+                self.assertEqual(raised.exception.status, 429)
+        with (
+            patch.object(self.store, "CONSENT_SUBJECT_LIMIT", 2),
+            patch.object(self.store, "CONSENT_SUBJECT_HOURLY", 1),
+        ):
+            self.assertEqual(change(self.owner, False, 1)["revision"], 2)
+            self.assertEqual(change(self.owner, False, 2)["revision"], 2)
+            with self.assertRaises(Refusal):
+                change(self.owner, True, 2)
+        self.assertEqual(len(self.store.export(self.owner)["consent"]), 2)

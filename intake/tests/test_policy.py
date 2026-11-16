@@ -111,9 +111,7 @@ class PolicyTests(unittest.TestCase):
                 clean = policy.scrub(
                     "Report description\n" + header + "\nContinue description"
                 )
-                self.assertEqual(
-                    clean, "Report description\n[secret removed]\nContinue description"
-                )
+                self.assertEqual(clean, "Report description\n[secret removed]")
                 self.assertEqual(policy.scrub(clean), clean)
 
     def test_inline_prompt_and_file_labels_remove_the_excerpt(self):
@@ -176,3 +174,26 @@ class PolicyTests(unittest.TestCase):
             clean = policy.scrub(raw)
             self.assertNotIn("sensitive", clean)
             self.assertEqual(policy.scrub(clean), clean)
+
+    def test_multiline_credentials_are_removed_at_both_boundaries(self):
+        from uuid import uuid4
+
+        for key in (
+            "clientSecret",
+            "privateKey",
+            "password",
+            "Authorization",
+            "Cookie",
+        ):
+            for marker in ("|", "|-", "|+", ">", ">-", ">+", '"', "'"):
+                with self.subTest(key=key, marker=marker):
+                    raw = f"Failure description\n{key}: {marker}\n  sensitive-canary\n  second-canary"
+                    title, text, _, _ = policy.prepare(submission(body=raw))
+                    for value in (
+                        text,
+                        policy.payload({"id": uuid4(), "title": title, "body": raw})[
+                            "body"
+                        ],
+                    ):
+                        self.assertNotIn("canary", value)
+                    self.assertEqual(policy.scrub(text), text)
