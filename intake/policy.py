@@ -45,6 +45,8 @@ class Reconcile(Input):
 EXCERPT = re.compile(
     r"(?is)\b(?:prompt(?: body)?|file contents?|clipboard|conversation|source code)\s*:.*\Z"
 )
+SECRET_FIELD = r"""(?ix)["']?\b(?:password|api[_ -]?key|(?:access_|refresh_)?token|client_secret|secret|credential|private_key|serial(?:[ _-]number)?|prompt(?:[ _-]body)?|file(?:[ _-]contents?)?|clipboard|conversation|source[ _-]code)\b["']?\s*[:=]\s*(?:"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|[^\s,;}]+)"""
+
 REDACTIONS = [
     (
         r"(?im)[\"']?\b(?:proxy-)?authorization[\"']?\s*[:=]\s*[^\r\n]+",
@@ -53,10 +55,8 @@ REDACTIONS = [
     (r"(?im)[\"']?\b(?:set-)?cookie[\"']?\s*[:=]\s*[^\r\n]+", "[secret removed]"),
     (r"(?s)```.*?(?:```|\Z)", "[excerpt removed]"),
     (r"(?is)-----BEGIN [^-]*PRIVATE KEY-----.*", "[secret removed]"),
-    (
-        r"(?i)\b(?:bearer|authorization|cookie|password|api[_ -]?key|token|serial(?: number)?)\s*[:= ]+\S+",
-        "[secret removed]",
-    ),
+    (SECRET_FIELD, "[secret removed]"),
+    (r"(?i)\bbearer\s+\S+", "[secret removed]"),
     (
         r"\b(?:gh[pousr]_[A-Za-z0-9_]+|github_pat_[A-Za-z0-9_]+|sk-[A-Za-z0-9_-]+)\b",
         "[secret removed]",

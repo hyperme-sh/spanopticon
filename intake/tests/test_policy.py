@@ -122,3 +122,39 @@ class PolicyTests(unittest.TestCase):
                 "private-canary",
                 policy.scrub("The failure involved " + label + " private-canary"),
             )
+
+    def test_quoted_credentials_and_excerpts_never_reach_stored_or_forwarded_text(self):
+        import json
+        from uuid import uuid4
+
+        for key in (
+            "password",
+            "api_key",
+            "token",
+            "access_token",
+            "refresh_token",
+            "client_secret",
+            "private_key",
+            "secret",
+            "prompt",
+            "file_contents",
+        ):
+            for value in (
+                "opaque-sensitive-value",
+                "multiword sensitive value",
+                'escaped " sensitive value',
+            ):
+                with self.subTest(key=key, value=value):
+                    raw = "Failure details " + json.dumps({key: value})
+                    title, text, digest, spam = policy.prepare(submission(body=raw))
+                    self.assertNotIn("sensitive", text)
+                    self.assertEqual(policy.scrub(text), text)
+                    self.assertNotIn(
+                        "sensitive",
+                        policy.payload({"id": uuid4(), "title": title, "body": raw})[
+                            "body"
+                        ],
+                    )
+        self.assertNotIn(
+            "sensitive", policy.scrub("password='multiword sensitive value'")
+        )
