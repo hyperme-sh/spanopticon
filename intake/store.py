@@ -227,17 +227,20 @@ class Store:
             ).fetchone()
             return self.view(row)
 
-    def reports(self, p, review=False):
+    def reports(self, p, review=False, after=None):
         with self.transaction(p.tenant) as db:
             self.member(db, p, reviewer=review, rights=not review)
             if review:
                 rows = db.execute(
-                    "SELECT * FROM feedback.report WHERE tenant=%s AND state<>'deleted' AND expires_at>now() ORDER BY created_at,id LIMIT 100",
-                    (p.tenant,),
+                    """SELECT * FROM feedback.report r WHERE tenant=%s AND state<>'deleted' AND expires_at>now()
+                    AND id>coalesce(%s::uuid,'00000000-0000-0000-0000-000000000000'::uuid)
+                    AND NOT EXISTS(SELECT 1 FROM feedback.erasure e WHERE e.tenant=r.tenant AND e.issuer=r.issuer AND e.subject=r.subject)
+                    ORDER BY id LIMIT 100""",
+                    (p.tenant, after),
                 ).fetchall()
             else:
                 rows = db.execute(
-                    "SELECT * FROM feedback.report WHERE tenant=%s AND issuer=%s AND subject=%s AND state<>'deleted' AND expires_at>now() ORDER BY created_at,id LIMIT 1000",
+                    "SELECT * FROM feedback.report r WHERE tenant=%s AND issuer=%s AND subject=%s AND state<>'deleted' AND expires_at>now() AND NOT EXISTS(SELECT 1 FROM feedback.erasure e WHERE e.tenant=r.tenant AND e.issuer=r.issuer AND e.subject=r.subject) ORDER BY created_at,id LIMIT 1000",
                     (p.tenant, p.issuer, p.subject),
                 ).fetchall()
             return [self.view(r) for r in rows]
@@ -249,6 +252,18 @@ class Store:
         ).fetchone()
         if not row:
             raise Refusal(404, "Report not found")
+        if row["state"] != "deleted" and row["expires_at"] <= datetime.now(
+            timezone.utc
+        ):
+            raise Refusal(409, "Report expired")
+        if (
+            row["state"] != "deleted"
+            and db.execute(
+                "SELECT 1 FROM feedback.erasure WHERE tenant=%s AND issuer=%s AND subject=%s",
+                (p.tenant, row["issuer"], row["subject"]),
+            ).fetchone()
+        ):
+            raise Refusal(409, "Deletion blocks this report")
         return row
 
     def decide(self, p, rid, body):
@@ -341,11 +356,11 @@ class Store:
             self.member(db, p, rights=True)
             args = (p.tenant, p.issuer, p.subject)
             reports = db.execute(
-                "SELECT * FROM feedback.report WHERE tenant=%s AND issuer=%s AND subject=%s AND state<>'deleted' AND expires_at>now() ORDER BY created_at,id",
+                "SELECT * FROM feedback.report r WHERE tenant=%s AND issuer=%s AND subject=%s AND state<>'deleted' AND expires_at>now() AND NOT EXISTS(SELECT 1 FROM feedback.erasure e WHERE e.tenant=r.tenant AND e.issuer=r.issuer AND e.subject=r.subject) ORDER BY created_at,id",
                 args,
             ).fetchall()
             consent = db.execute(
-                "SELECT device,revision,enabled,notice,purpose,changed_at FROM feedback.consent_history WHERE tenant=%s AND issuer=%s AND subject=%s",
+                "SELECT device,revision,enabled,notice,purpose,changed_at FROM feedback.consent_history WHERE tenant=%s AND issuer=%s AND subject=%s AND (expires_at IS NULL OR expires_at>now())",
                 args,
             ).fetchall()
             destinations = db.execute(
@@ -392,7 +407,12 @@ class Store:
     def purge(self, tenant):
         with self.transaction(tenant) as db:
             db.execute(
-                "UPDATE feedback.report SET state='deleted',title='',body='',fingerprint='',external_pending=(external_pending OR issue_number IS NOT NULL) WHERE tenant=%s AND expires_at<=now() AND state<>'deleted'",
+                """UPDATE feedback.consent c SET enabled=false,revision=revision+1,changed_at=now()
+                WHERE tenant=%s AND enabled AND EXISTS(SELECT 1 FROM feedback.erasure e WHERE e.tenant=c.tenant AND e.issuer=c.issuer AND e.subject=c.subject)""",
+                (tenant,),
+            )
+            db.execute(
+                "UPDATE feedback.report SET state='deleted',title='',body='',fingerprint='',external_pending=(external_pending OR issue_number IS NOT NULL),expires_at=least(expires_at,now()) WHERE tenant=%s AND state<>'deleted' AND (expires_at<=now() OR EXISTS(SELECT 1 FROM feedback.erasure e WHERE e.tenant=feedback.report.tenant AND e.issuer=feedback.report.issuer AND e.subject=feedback.report.subject))",
                 (tenant,),
             )
             # Keep only content-free destination pointers for unresolved processor

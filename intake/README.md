@@ -61,7 +61,7 @@ are not cacheable. Validation errors never echo rejected input.
 | `PUT /v1/consent` | `enabled`, `expected_revision`, notice `human-reports-v1`, purpose `product-feedback` |
 | `POST /v1/reports` | UUID `Idempotency-Key`; `consent_revision`, `category` (`bug`/`feature`), configured `component`, `title`, `body`, literal `preview_confirmed: true` |
 | `GET /v1/reports` | Original subject's unexpired reports, at most 1,000; export is complete |
-| `GET /v1/review` | Reviewer's tenant queue, oldest 100 records |
+| `GET /v1/review` | Reviewer's tenant queue, 100 records in ID order; pass the last ID as `?after=` for the next page |
 | `POST /v1/review/{id}/decision` | Reviewer submits `accepted` or `rejected` and literal `human_reviewed: true` |
 | `POST /v1/review/{id}/publish` | Forward an accepted, unexpired report to its configured repository |
 | `POST /v1/review/{id}/reconcile` | Resolve an uncertain send with `issue_number`; requires an exact remote content/marker match |

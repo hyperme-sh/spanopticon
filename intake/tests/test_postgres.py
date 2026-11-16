@@ -301,3 +301,48 @@ class PostgresTests(unittest.TestCase):
         github.delete.return_value = True
         self.store.cleanup_destinations(self.tenant, github)
         self.assertTrue(self.store.erase(self.owner)["complete"])
+
+    def test_retained_erasure_blocks_restored_text_before_sweep(self):
+        row = self.submit()
+        self.store.erase(self.owner)
+        with self.store.transaction(self.tenant) as db:
+            db.execute(
+                "UPDATE feedback.report SET state='pending',title='Restored title',body='restored private text',expires_at=now()+interval '180 days' WHERE tenant=%s AND id=%s",
+                (self.tenant, row["id"]),
+            )
+            db.execute(
+                "UPDATE feedback.consent SET enabled=true WHERE tenant=%s",
+                (self.tenant,),
+            )
+        self.assertEqual(self.store.reports(self.owner), [])
+        self.assertEqual(self.store.reports(self.reviewer, review=True), [])
+        self.assertEqual(self.store.export(self.owner)["reports"], [])
+        with self.assertRaises(Refusal):
+            self.accept(row)
+        self.store.purge(self.tenant)
+        self.assertFalse(self.store.consent(self.owner)["enabled"])
+        with self.store.transaction(self.tenant) as db:
+            self.assertEqual(
+                db.execute(
+                    "SELECT body FROM feedback.report WHERE tenant=%s AND id=%s",
+                    (self.tenant, row["id"]),
+                ).fetchone()["body"],
+                "",
+            )
+
+    def test_review_cursor_is_scoped(self):
+        first = self.submit(title="First distinct report")
+        second = self.submit(title="Second distinct report")
+        ordered = sorted([first["id"], second["id"]])
+        self.assertEqual(
+            [
+                r["id"]
+                for r in self.store.reports(
+                    self.reviewer, review=True, after=ordered[0]
+                )
+            ],
+            [ordered[1]],
+        )
+        self.assertEqual(
+            self.store.reports(self.foreign, review=True, after=ordered[0]), []
+        )

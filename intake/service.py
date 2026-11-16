@@ -193,8 +193,8 @@ def reports(p: Principal = Depends(principal)):
 
 
 @app.get("/v1/review")
-def review(p: Principal = Depends(principal)):
-    return app.state.store.reports(p, review=True)
+def review(after: UUID | None = None, p: Principal = Depends(principal)):
+    return app.state.store.reports(p, review=True, after=after)
 
 
 @app.post("/v1/review/{rid}/decision")
