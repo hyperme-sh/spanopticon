@@ -22,3 +22,9 @@ omit the listener declaration to keep the runtime listener off. Runtime must
 compare tenant and pins against `plane.json` and fail closed on invalid TLS files.
 Peer configuration creates no grants, enables no digest billing and changes no
 service channel or package version. HTTPS peer origins cannot contain paths.
+
+The Plane consumer contract lives in `tests/test_plane_policy_contract.py`.
+Plane's private contract CI supplies `PLANE_POLICY_SOURCE` and runs that test
+against its own loader with this renderer as the pinned public fixture. Public
+Spanopticon PRs do not receive private Plane source or credentials, and do not
+run on private runners. Local isolated contract runs may supply the same path.
