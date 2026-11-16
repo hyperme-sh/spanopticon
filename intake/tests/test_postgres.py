@@ -457,3 +457,25 @@ class PostgresTests(unittest.TestCase):
             with self.assertRaises(Refusal):
                 change(self.owner, True, 2)
         self.assertEqual(len(self.store.export(self.owner)["consent"]), 2)
+
+    def test_reviewer_cannot_consent_or_submit_and_submitter_cannot_review(self):
+        for operation in (
+            lambda: self.optin(self.reviewer),
+            lambda: self.submit(self.reviewer),
+        ):
+            with self.assertRaises(Refusal) as raised:
+                operation()
+            self.assertEqual(raised.exception.status, 403)
+        row = self.submit()
+        for operation in (
+            lambda: self.store.reports(self.owner, review=True),
+            lambda: self.store.decide(
+                self.owner,
+                row["id"],
+                Decision(disposition="accepted", human_reviewed=True),
+            ),
+            lambda: self.store.publish(self.owner, row["id"], Mock()),
+        ):
+            with self.assertRaises(Refusal) as raised:
+                operation()
+            self.assertEqual(raised.exception.status, 403)

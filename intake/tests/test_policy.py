@@ -144,6 +144,11 @@ class PolicyTests(unittest.TestCase):
             "apiKey",
             "access-token",
             "client secret",
+            "DATABASE_PASSWORD",
+            "OPENAI_API_KEY",
+            "SERVICE_AUTH_TOKEN",
+            "DATABASE-PASSWORD",
+            "service_clientSecret",
         ):
             for value in (
                 "opaque-sensitive-value",

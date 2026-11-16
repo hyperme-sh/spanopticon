@@ -74,7 +74,7 @@ class Store:
             ):
                 raise RuntimeError("Intake migration required")
 
-    def member(self, db, p, reviewer=False, rights=False):
+    def member(self, db, p, reviewer=False, rights=False, submitter=False):
         row = db.execute(
             "SELECT role,enabled FROM feedback.member WHERE tenant=%s AND issuer=%s AND subject=%s",
             (p.tenant, p.issuer, p.subject),
@@ -83,13 +83,14 @@ class Store:
             not row
             or (not rights and not row["enabled"])
             or (reviewer and row["role"] != "reviewer")
+            or (submitter and row["role"] != "submitter")
         ):
             raise Refusal(403, "Intake membership required")
         return row
 
     def consent(self, p, body=None):
         with self.transaction(p.tenant) as db:
-            self.member(db, p)
+            self.member(db, p, submitter=True)
             args = (p.tenant, p.issuer, p.subject, p.device)
             row = db.execute(
                 "SELECT * FROM feedback.consent WHERE tenant=%s AND issuer=%s AND subject=%s AND device=%s",
@@ -207,7 +208,7 @@ class Store:
     def submit(self, p, request_id, body, repository):
         title, text, fingerprint, spam = policy.prepare(body)
         with self.transaction(p.tenant) as db:
-            self.member(db, p)
+            self.member(db, p, submitter=True)
             scope = (p.tenant, p.issuer, p.subject, p.device)
             consent = db.execute(
                 "SELECT revision,enabled FROM feedback.consent WHERE tenant=%s AND issuer=%s AND subject=%s AND device=%s",

@@ -153,3 +153,9 @@ when opt-in limits are exhausted. Expiry frees history capacity.
 
 Recognized credential labels discard the remaining pasted excerpt, including
 multiline YAML or JSON values, before storage and again before forwarding.
+
+Only declared submitters may read or change device consent and submit reports.
+Declared reviewers may vet and forward reports but cannot use intake writes.
+Subject export and deletion remain available regardless of role, including after
+membership is disabled. Known secret fields also match namespaced environment
+labels such as `DATABASE_PASSWORD`, `OPENAI_API_KEY`, and `SERVICE_AUTH_TOKEN`.

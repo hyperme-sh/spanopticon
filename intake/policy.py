@@ -47,7 +47,7 @@ EXCERPT = re.compile(
 )
 # A recognized secret label discards the remaining excerpt, including multiline
 # YAML/JSON values. Guessing the end of an arbitrary pasted value is unsafe.
-SECRET_FIELD = r"""(?isx)["']?\b(?:password|passphrase|passwd|api[_ -]?key|(?:(?:access|refresh|auth|id)[_ -]?)?token|client[_ -]?secret|secret(?:[_ -]?key)?|credential|private[_ -]?key|(?:proxy-)?authorization|(?:set-)?cookie|serial(?:[ _-]number)?|prompt(?:[ _-]body)?|file(?:[ _-]contents?)?|clipboard|conversation|source[ _-]code)\b["']?\s*[:=]\s*.*\Z"""
+SECRET_FIELD = r"""(?isx)["']?(?<![a-zA-Z0-9])(?:[a-zA-Z0-9]+[_-])*(?:password|passphrase|passwd|api[_ -]?key|(?:(?:access|refresh|auth|id)[_ -]?)?token|client[_ -]?secret|secret(?:[_ -]?key)?|credential|private[_ -]?key|(?:proxy-)?authorization|(?:set-)?cookie|serial(?:[ _-]number)?|prompt(?:[ _-]body)?|file(?:[ _-]contents?)?|clipboard|conversation|source[ _-]code)\b["']?\s*[:=]\s*.*\Z"""
 
 REDACTIONS = [
     (r"(?s)```.*?(?:```|\Z)", "[excerpt removed]"),
