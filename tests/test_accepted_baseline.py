@@ -63,6 +63,23 @@ class AcceptedBaselineTest(unittest.TestCase):
         self.assertEqual(self.verify(), '0.24.0')
         self.assertEqual(len(self.calls), 2)
 
+    def test_ticket_rename_reads_immutable_history_from_current_repository(self):
+        legacy = 'hyperme-sh/hypermesh-ticket'
+        repository = 'hyperme-sh/ticket'
+        self.bundle['components']['hypermesh-ticket'] = self.bundle['components'].pop('component')
+        self.provenance['repository'] = legacy
+        (self.folder / 'release.json').write_text(json.dumps(self.bundle))
+        path = self.folder / 'provenance.json'
+        path.write_text(json.dumps(self.provenance))
+        self.extra = {f'repos/{repository}/releases/7': self.release,
+                      f'repos/{repository}/git/ref/tags/v0.24.0': self.reference}
+        self.assertEqual(verify_accepted_record(self.root, repository, fetch=self.fetch), '0.24.0')
+        self.assertTrue(all(call.startswith(f'repos/{repository}/') for call in self.calls))
+        self.provenance['repository'] = 'elsewhere/hypermesh-ticket'
+        path.write_text(json.dumps(self.provenance))
+        with self.assertRaisesRegex(ValueError, 'provenance repository mismatch'):
+            verify_accepted_record(self.root, repository, fetch=self.fetch)
+
     def test_test_tag_cannot_reserve_a_stable_version(self):
         self.provenance['tag'] = 'test-' + 'b'*40
         with self.assertRaisesRegex(ValueError, 'test snapshots'):

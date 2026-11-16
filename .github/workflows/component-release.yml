@@ -35,7 +35,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           repository: hyperme-sh/spanopticon
-          ref: 7f5b9b21363d41b8f8ed14571195d10f4a11899f
+          ref: a8bfd6846899a6c42760d1aa9a39bd96049d2d99
           path: policy
           persist-credentials: false
       - id: inspect
@@ -82,7 +82,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           repository: hyperme-sh/spanopticon
-          ref: 7f5b9b21363d41b8f8ed14571195d10f4a11899f
+          ref: a8bfd6846899a6c42760d1aa9a39bd96049d2d99
           path: policy
           persist-credentials: false
       - name: Check contracts, package versions and the requested release
@@ -106,7 +106,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           repository: hyperme-sh/spanopticon
-          ref: 7f5b9b21363d41b8f8ed14571195d10f4a11899f
+          ref: a8bfd6846899a6c42760d1aa9a39bd96049d2d99
           path: policy
           persist-credentials: false
       - name: Validate first declaration and absence of stable history
@@ -152,7 +152,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           repository: hyperme-sh/spanopticon
-          ref: 7f5b9b21363d41b8f8ed14571195d10f4a11899f
+          ref: a8bfd6846899a6c42760d1aa9a39bd96049d2d99
           path: policy
           persist-credentials: false
       - id: comparison

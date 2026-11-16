@@ -10,7 +10,7 @@ import tomllib
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from release.policy import PolicyError, contract_path, json_document, require, validate, version, load_bundle
-from release.accepted import verify_accepted_record, github_json, REPOSITORY
+from release.accepted import component_name, verify_accepted_record, github_json, REPOSITORY
 
 
 def configuration(root, repository, line):
@@ -19,7 +19,7 @@ def configuration(root, repository, line):
     require(config.get('schema_version') == 1, 'Unsupported component policy')
     require(config.get('repository') == repository, 'Policy repository identity mismatch')
     require(config.get('line') == line, 'Policy differs from synchronized release line')
-    name = repository.split('/')[-1]
+    name = component_name(repository)
     require(config.get('component') == name, 'Policy component identity mismatch')
     files = config.get('version_files')
     require(isinstance(files, list) and files and len(files) == len(set(files)), 'Version files must be a nonempty unique list')
