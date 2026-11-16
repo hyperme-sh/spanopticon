@@ -78,6 +78,14 @@ def github_asset(repository, asset_id):
         raise PolicyError("Unable to verify published container provenance") from None
 
 
+# Ticket keeps the component ID used by its immutable release bundles.
+FORMER_REPOSITORIES = {"hyperme-sh/ticket": "hyperme-sh/hypermesh-ticket"}
+
+
+def component_name(repository):
+    return FORMER_REPOSITORIES.get(repository, repository).split("/")[1]
+
+
 def verify_accepted_record(root, repository, *, required=False, fetch=None, fetch_asset=None):
     """Return the stable version, or None when no accepted record is present."""
     root = Path(root).resolve()
@@ -91,11 +99,14 @@ def verify_accepted_record(root, repository, *, required=False, fetch=None, fetc
     require(manifest.is_file() and provenance_path.is_file(), "Accepted stable release requires manifest and provenance")
     require(manifest.resolve().is_relative_to(root) and provenance_path.resolve().is_relative_to(root), "Accepted record escapes checkout")
     bundle, _ = load_bundle(manifest)
-    name = repository.split("/")[1]
+    name = component_name(repository)
     require(set(bundle["components"]) == {name}, "Accepted record must contain its owning component")
     component = bundle["components"][name]
     provenance = json_document(provenance_path)
-    require(isinstance(provenance, dict) and provenance.get("repository") == repository, "Accepted provenance repository mismatch")
+    allowed_sources = {repository, FORMER_REPOSITORIES.get(repository, repository)}
+    historical_repository = provenance.get("repository") if isinstance(provenance, dict) else None
+    require(isinstance(historical_repository, str) and historical_repository in allowed_sources,
+            "Accepted provenance repository mismatch")
     tag = "v" + component["version"]
     require(provenance.get("tag") == tag, "Accepted baseline requires a stable version tag; test snapshots are qualification only")
     revision = provenance.get("revision")
@@ -154,7 +165,7 @@ def verify_accepted_record(root, repository, *, required=False, fetch=None, fetc
                 "Published container provenance bytes differ from the stable asset")
         document = json.loads(raw)
         require(isinstance(document, dict) and document.get("schema_version") == 1
-                and document.get("repository") == repository
+                and document.get("repository") == historical_repository
                 and document.get("revision") == revision
                 and document.get("version") == component["version"]
                 and document.get("artifact") == artifact,
