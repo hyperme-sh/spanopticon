@@ -386,7 +386,9 @@ class Store:
                 args,
             )
             db.execute(
-                "UPDATE feedback.consent_history SET expires_at=least(coalesce(expires_at,now()+interval '24 months'),now()+interval '24 months') WHERE tenant=%s AND issuer=%s AND subject=%s",
+                """UPDATE feedback.consent_history c SET expires_at=least(coalesce(c.expires_at,e.expires_at),e.expires_at)
+                FROM feedback.erasure e WHERE c.tenant=%s AND c.issuer=%s AND c.subject=%s
+                AND e.tenant=c.tenant AND e.issuer=c.issuer AND e.subject=c.subject""",
                 args,
             )
             db.execute(
@@ -407,8 +409,15 @@ class Store:
     def purge(self, tenant):
         with self.transaction(tenant) as db:
             db.execute(
-                """UPDATE feedback.consent c SET enabled=false,revision=revision+1,changed_at=now()
-                WHERE tenant=%s AND enabled AND EXISTS(SELECT 1 FROM feedback.erasure e WHERE e.tenant=c.tenant AND e.issuer=c.issuer AND e.subject=c.subject)""",
+                """UPDATE feedback.consent c SET enabled=false,revision=revision+1,changed_at=least(c.changed_at,e.requested_at)
+                FROM feedback.erasure e WHERE c.tenant=%s AND c.enabled
+                AND e.tenant=c.tenant AND e.issuer=c.issuer AND e.subject=c.subject""",
+                (tenant,),
+            )
+            db.execute(
+                """UPDATE feedback.consent_history c SET expires_at=least(coalesce(c.expires_at,e.expires_at),e.expires_at)
+                FROM feedback.erasure e WHERE c.tenant=%s
+                AND e.tenant=c.tenant AND e.issuer=c.issuer AND e.subject=c.subject""",
                 (tenant,),
             )
             db.execute(

@@ -391,3 +391,29 @@ class PostgresTests(unittest.TestCase):
                     (self.tenant,),
                 ).fetchone()["external_pending"]
             )
+
+    def test_restored_consent_history_keeps_original_erasure_deadline(self):
+        self.store.erase(self.owner)
+        with self.store.transaction(self.tenant) as db:
+            db.execute(
+                "UPDATE feedback.erasure SET requested_at=now()-interval '23 months',expires_at=now()+interval '1 month' WHERE tenant=%s",
+                (self.tenant,),
+            )
+            original = db.execute(
+                "SELECT expires_at FROM feedback.erasure WHERE tenant=%s",
+                (self.tenant,),
+            ).fetchone()["expires_at"]
+            db.execute(
+                "UPDATE feedback.consent_history SET expires_at=NULL WHERE tenant=%s AND subject=%s",
+                (self.tenant, self.owner.subject),
+            )
+        self.store.purge(self.tenant)
+        self.store.erase(self.owner)
+        self.store.purge(self.tenant)
+        with self.store.transaction(self.tenant) as db:
+            rows = db.execute(
+                "SELECT expires_at FROM feedback.consent_history WHERE tenant=%s AND subject=%s",
+                (self.tenant, self.owner.subject),
+            ).fetchall()
+        self.assertTrue(rows)
+        self.assertTrue(all(row["expires_at"] == original for row in rows))
