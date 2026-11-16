@@ -11,6 +11,10 @@ OWNERS = {
  'hypermesh-gateway': ('.github/workflows/package.yml','tested-runtime-image'),
  'hypermesh-plane': ('.github/workflows/core.yml','tested-core-runtime-image'),
 }
+SOURCE_REPOSITORIES = {
+    'hypermesh-gateway': ('hyperme-sh/gateway', 1439103692),
+    'hypermesh-plane': ('hyperme-sh/plane', 1439103613),
+}
 LIMIT=2*1024*1024*1024
 INDEX='application/vnd.oci.image.index.v1+json'
 CONFIG='application/vnd.oci.image.config.v1+json'
@@ -47,9 +51,9 @@ def provenance(value,run,artifact):
               and run.get('head_branch')=='main' and run.get('event')=='push'
               and run.get('path')==workflow and run.get('status')=='completed' and run.get('conclusion')=='success',
               'Image source is not the pinned successful main qualification')
-    repo='hyperme-sh/'+value['owner']
-    b.require(run.get('repository',{}).get('full_name')==repo and run.get('head_repository',{}).get('full_name')==repo,
-              'Image source repository mismatch')
+    repo, repo_id = SOURCE_REPOSITORIES[value['owner']]
+    b.require(all(run.get(key, {}).get('full_name') == repo and run[key].get('id') == repo_id
+                  for key in ('repository', 'head_repository')), 'Image source repository mismatch')
     linked=artifact.get('workflow_run',{})
     b.require(artifact.get('id')==value['artifact_id'] and artifact.get('name')==name and artifact.get('expired') is False
               and artifact.get('digest')==value['artifact_digest'] and linked.get('id')==value['run_id']
