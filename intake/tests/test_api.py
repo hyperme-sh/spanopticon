@@ -116,6 +116,31 @@ class ApiTests(unittest.TestCase):
         self.assertEqual(response.status_code, 422)
         self.store.erase.assert_not_called()
 
+    def test_export_cursor_and_concurrency_limit(self):
+        from threading import BoundedSemaphore
+        from unittest.mock import patch
+
+        cursor = uuid4()
+        self.store.export.return_value = {"reports": [], "next_after": None}
+        result = self.client.get(
+            f"/v1/privacy/export?after={cursor}", headers=self.token()
+        )
+        self.assertEqual(result.status_code, 200)
+        self.assertEqual(self.store.export.call_args.kwargs["after"], cursor)
+        slots = BoundedSemaphore(1)
+        slots.acquire()
+        with patch.object(service, "EXPORT_SLOTS", slots):
+            self.assertEqual(
+                self.client.get("/v1/privacy/export", headers=self.token()).status_code,
+                429,
+            )
+        self.assertEqual(
+            self.client.get(
+                "/v1/privacy/export?after=invalid", headers=self.token()
+            ).status_code,
+            422,
+        )
+
 
 class MaintenanceTests(unittest.IsolatedAsyncioTestCase):
     async def test_one_tenant_failure_does_not_skip_other_tenants(self):

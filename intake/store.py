@@ -23,6 +23,11 @@ class Refusal(Exception):
 
 
 class Store:
+    REPORT_SUBJECT_BYTES = 16 * 1024 * 1024
+    REPORT_TENANT_BYTES = 256 * 1024 * 1024
+    REPORT_SUBJECT_ROWS = 4096
+    REPORT_TENANT_ROWS = 65536
+    EXPORT_PAGE = 100
     CONSENT_SUBJECT_LIMIT = 2048
     CONSENT_TENANT_LIMIT = 65536
     CONSENT_SUBJECT_HOURLY = 20
@@ -247,6 +252,28 @@ class Store:
             ).fetchone()["n"]
             if count >= 10 or tenant_count >= 1000:
                 raise Refusal(429, "Submission limit reached")
+            incoming = len(title.encode("utf-8")) + len(text.encode("utf-8"))
+            for clause, params, byte_limit, row_limit in (
+                (
+                    "tenant=%s AND issuer=%s AND subject=%s",
+                    scope[:3],
+                    self.REPORT_SUBJECT_BYTES,
+                    self.REPORT_SUBJECT_ROWS,
+                ),
+                (
+                    "tenant=%s",
+                    scope[:1],
+                    self.REPORT_TENANT_BYTES,
+                    self.REPORT_TENANT_ROWS,
+                ),
+            ):
+                usage = db.execute(
+                    "SELECT count(*) AS n, coalesce(sum(octet_length(title)+octet_length(body)),0) AS bytes FROM feedback.report WHERE "
+                    + clause,
+                    params,
+                ).fetchone()
+                if usage["n"] >= row_limit or usage["bytes"] + incoming > byte_limit:
+                    raise Refusal(429, "Retained report capacity reached")
             duplicate = db.execute(
                 "SELECT 1 FROM feedback.report WHERE tenant=%s AND fingerprint=%s AND state NOT IN ('deleted','spam','rejected') AND expires_at>now() LIMIT 1",
                 (p.tenant, fingerprint),
@@ -400,26 +427,41 @@ class Store:
             ).fetchone()
             return self.view(row)
 
-    def export(self, p):
+    def export(self, p, after=None):
         with self.transaction(p.tenant) as db:
             self.member(db, p, rights=True)
             args = (p.tenant, p.issuer, p.subject)
-            reports = db.execute(
-                "SELECT * FROM feedback.report r WHERE tenant=%s AND issuer=%s AND subject=%s AND state<>'deleted' AND expires_at>now() AND NOT EXISTS(SELECT 1 FROM feedback.erasure e WHERE e.tenant=r.tenant AND e.issuer=r.issuer AND e.subject=r.subject) ORDER BY created_at,id",
-                args,
+            rows = db.execute(
+                """SELECT r.*, (state<>'deleted' AND expires_at>now()
+                AND NOT EXISTS(SELECT 1 FROM feedback.erasure e WHERE e.tenant=r.tenant AND e.issuer=r.issuer AND e.subject=r.subject)) AS visible
+                FROM feedback.report r WHERE tenant=%s AND issuer=%s AND subject=%s
+                AND id>coalesce(%s::uuid,'00000000-0000-0000-0000-000000000000'::uuid)
+                ORDER BY id LIMIT %s""",
+                (*args, after, self.EXPORT_PAGE + 1),
             ).fetchall()
+            more = len(rows) > self.EXPORT_PAGE
+            rows = rows[: self.EXPORT_PAGE]
             consent = db.execute(
                 "SELECT device,revision,enabled,notice,purpose,changed_at FROM feedback.consent_history WHERE tenant=%s AND issuer=%s AND subject=%s AND (expires_at IS NULL OR expires_at>now())",
                 args,
             ).fetchall()
-            destinations = db.execute(
-                "SELECT id,repository,issue_number,external_pending FROM feedback.report WHERE tenant=%s AND issuer=%s AND subject=%s AND (issue_number IS NOT NULL OR external_pending)",
-                args,
-            ).fetchall()
             return {
-                "reports": [self.view(r) for r in reports],
+                "reports": [self.view(r) for r in rows if r["visible"]],
                 "consent": consent,
-                "destinations": destinations,
+                "destinations": [
+                    {
+                        k: r[k]
+                        for k in (
+                            "id",
+                            "repository",
+                            "issue_number",
+                            "external_pending",
+                        )
+                    }
+                    for r in rows
+                    if r["issue_number"] is not None or r["external_pending"]
+                ],
+                "next_after": str(rows[-1]["id"]) if more else None,
             }
 
     def erase(self, p):

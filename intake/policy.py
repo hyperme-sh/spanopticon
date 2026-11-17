@@ -116,7 +116,7 @@ def scrub(value):
 def prepare(body):
     raw = body.model_dump()
     links = len(re.findall(r"(?i)https?://|www\.", raw["body"]))
-    title, text = scrub(raw["title"]), scrub(raw["body"])
+    title, text = scrub(raw["title"])[:160], scrub(raw["body"])[:4000]
     spam = (
         links > 3
         or len(set(text.casefold())) < 5

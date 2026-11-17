@@ -235,3 +235,10 @@ class PolicyTests(unittest.TestCase):
             self.assertEqual(policy.scrub(value), value.strip())
             self.assertNotIn("canary", policy.scrub(value + " PASSWORD=canary"))
         self.assertLess(time.monotonic() - started, 2)
+
+    def test_normalized_storage_lengths_remain_bounded(self):
+        title, body, _, _ = policy.prepare(
+            submission(title="\ufdfa" * 160, body="\ufdfa" * 4000)
+        )
+        self.assertLessEqual(len(title), 160)
+        self.assertLessEqual(len(body), 4000)

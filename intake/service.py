@@ -6,10 +6,12 @@ import json
 import os
 from pathlib import Path
 import re
+from threading import BoundedSemaphore
 from uuid import UUID
 import jwt
 import psycopg
 from fastapi import Depends, FastAPI, Header, HTTPException
+from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
@@ -224,9 +226,17 @@ def close(rid: UUID, p: Principal = Depends(principal)):
     return app.state.store.close(p, rid)
 
 
+EXPORT_SLOTS = BoundedSemaphore(2)
+
+
 @app.get("/v1/privacy/export")
-def export(p: Principal = Depends(principal)):
-    return app.state.store.export(p)
+def export(after: UUID | None = None, p: Principal = Depends(principal)):
+    if not EXPORT_SLOTS.acquire(blocking=False):
+        raise HTTPException(429, "Export capacity reached; retry later")
+    try:
+        return JSONResponse(jsonable_encoder(app.state.store.export(p, after=after)))
+    finally:
+        EXPORT_SLOTS.release()
 
 
 @app.delete("/v1/privacy/data")

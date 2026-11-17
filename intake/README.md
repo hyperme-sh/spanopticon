@@ -159,3 +159,13 @@ Declared reviewers may vet and forward reports but cannot use intake writes.
 Subject export and deletion remain available regardless of role, including after
 membership is disabled. Known secret fields also match namespaced environment
 labels such as `DATABASE_PASSWORD`, `OPENAI_API_KEY`, and `SERVICE_AUTH_TOKEN`.
+
+Privacy exports use `?after=<next_after>` to page through at most 100 report rows
+and their destination mappings. Continue until `next_after` is null, even if a
+page has no visible report text (deleted/expired rows can still have destinations).
+The bounded consent history is repeated on each page. Each worker permits at most
+two concurrent exports through JSON serialization; excess requests receive 429.
+Retained report content is capped at 16 MiB/4,096 rows per subject and
+256 MiB/65,536 rows per tenant, including pending cleanup metadata. New reports
+receive 429 when capacity is exhausted; existing export/deletion remain available.
+Normalized stored titles and bodies remain capped at 160 and 4,000 characters.

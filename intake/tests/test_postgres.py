@@ -479,3 +479,33 @@ class PostgresTests(unittest.TestCase):
             with self.assertRaises(Refusal) as raised:
                 operation()
             self.assertEqual(raised.exception.status, 403)
+
+    def test_export_pages_cover_reports_and_destinations_with_retained_caps(self):
+        rows = [self.submit(title=f"Bounded export report {i}") for i in range(3)]
+        self.submit(self.peer)
+        ordered = sorted(rows, key=lambda r: r["id"])
+        with self.store.transaction(self.tenant) as db:
+            db.execute(
+                "UPDATE feedback.report SET issue_number=17,external_pending=true WHERE tenant=%s AND id=%s",
+                (self.tenant, ordered[-1]["id"]),
+            )
+        with patch.object(self.store, "EXPORT_PAGE", 2):
+            first = self.store.export(self.owner)
+            second = self.store.export(self.owner, after=first["next_after"])
+        self.assertEqual(
+            [r["id"] for r in first["reports"] + second["reports"]],
+            [r["id"] for r in ordered],
+        )
+        self.assertIsNone(second["next_after"])
+        self.assertEqual(second["destinations"][0]["issue_number"], 17)
+        for name, limit in (
+            ("REPORT_SUBJECT_BYTES", 1),
+            ("REPORT_TENANT_BYTES", 1),
+            ("REPORT_SUBJECT_ROWS", 3),
+            ("REPORT_TENANT_ROWS", 4),
+        ):
+            with self.subTest(name=name), patch.object(self.store, name, limit):
+                with self.assertRaises(Refusal) as raised:
+                    self.submit(title="Over retained capacity")
+                self.assertEqual(raised.exception.status, 429)
+        self.assertEqual(len(self.store.export(self.owner)["reports"]), 3)
