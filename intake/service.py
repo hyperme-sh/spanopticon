@@ -10,12 +10,13 @@ from threading import BoundedSemaphore
 from uuid import UUID
 import jwt
 import psycopg
-from fastapi import Depends, FastAPI, Header, HTTPException
+from fastapi import Depends, FastAPI, Header, HTTPException, Request
 from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from .github import GitHub
+from . import native_identity
 from .policy import Consent, Submission, Decision, Reconcile
 from .store import Principal, Store, Refusal
 
@@ -73,6 +74,7 @@ async def lifespan(app):
     )
     await asyncio.to_thread(app.state.store.ready)
     app.state.key = Path(os.environ["IDENTITY_PUBLIC_KEY_FILE"]).read_bytes()
+    app.state.native_key = native_identity.load_key(app.state.config)
 
     async def sweep():
         while True:
@@ -127,17 +129,30 @@ async def database_unavailable(request, exc):
     return JSONResponse({"detail": "Intake unavailable"}, status_code=503)
 
 
-def principal(credential: HTTPAuthorizationCredentials = Depends(HTTPBearer())):
+def principal(request: Request, credential: HTTPAuthorizationCredentials = Depends(HTTPBearer())):
     cfg = app.state.config
     try:
-        claims = jwt.decode(
-            credential.credentials,
-            app.state.key,
-            algorithms=[cfg["algorithm"]],
-            audience=cfg["audience"],
-            issuer=cfg["issuer"],
-            options={"require": ["sub", "iat", "exp", "tenant_id", "device_id"]},
-        )
+        token = credential.credentials
+        if token.startswith(native_identity.PREFIX):
+            if cfg.get("native_feedback_enabled") is not True or getattr(app.state, "native_key", None) is None:
+                raise ValueError("Native feedback disabled")
+            claims = native_identity.verify(token, app.state.native_key,
+                cfg["native_feedback_issuer"], request.method, request.url.path)
+            issuer = cfg["native_feedback_issuer"]
+        else:
+            claims = jwt.decode(
+                credential.credentials,
+                app.state.key,
+                algorithms=[cfg["algorithm"]],
+                audience=cfg["audience"],
+                issuer=cfg["issuer"],
+                options={"require": ["sub", "iat", "exp", "tenant_id", "device_id"]},
+            )
+            # Removing the native prefix must not broaden a grant's route scope,
+            # even if an operator accidentally reuses an issuer/key configuration.
+            if claims.get("token_use") == native_identity.USE:
+                raise ValueError("Native grant requires its scoped verifier")
+            issuer = cfg["issuer"]
         tenant = str(UUID(claims["tenant_id"]))
         subject, device = claims["sub"], claims["device_id"]
         if (
@@ -151,7 +166,7 @@ def principal(credential: HTTPAuthorizationCredentials = Depends(HTTPBearer())):
             raise ValueError("Unknown tenant")
     except (jwt.InvalidTokenError, ValueError, TypeError, KeyError):
         raise HTTPException(401, "Invalid machine credential") from None
-    return Principal(tenant, cfg["issuer"], subject, device)
+    return Principal(tenant, issuer, subject, device)
 
 
 def github(p):

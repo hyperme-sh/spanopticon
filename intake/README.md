@@ -175,3 +175,27 @@ including joined values; tool-specific aliases cannot safely identify secrets.
 
 Fields containing control or invisible format characters other than newline/tab
 are discarded as a whole. Terminal escape fragments are never retained.
+
+## Optional native Plane grants
+
+Native machine feedback uses a separate, default-off verifier. Set
+`native_feedback_enabled: true` and `native_feedback_issuer` in intake's private
+configuration, with the dedicated Plane Ed25519 public PEM supplied through
+`NATIVE_FEEDBACK_PUBLIC_KEY_FILE`, only when separately enabling this path.
+No configuration or keys are installed by this change. Plane's issuer must
+match exactly; its general machine credential is never sent to intake.
+
+The `hm_feedback_` prefix identifies a signed EdDSA JWT with fixed audience
+`hypermesh-feedback-v1`, `token_use=native-feedback-v1`, canonical UUID tenant,
+subject, device and request ID (`jti`), and an integer lifetime of at most
+60 seconds. Only `GET/PUT /v1/consent` and `POST /v1/reports` accept it. Removing
+the prefix cannot bypass the restricted verifier. Existing credentials are
+unchanged. Native grants cannot review, publish, export, list or erase reports.
+
+Intake membership must separately name the exact Plane issuer and canonical
+subject with the submitter role. Existing membership, consent revisions, spam
+limits, idempotency, scrubbing and human vetting still apply. A grant is reusable
+within its short lifetime, not an exact-report or one-use authorization. Plane
+revocation blocks new grants; existing ones may remain usable for 60 seconds.
+Local opt-in and confirmation remain required in clients. Native client sending
+and OIDC phone credential composition remain separate work.
