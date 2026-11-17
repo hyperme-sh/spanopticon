@@ -265,3 +265,28 @@ class PolicyTests(unittest.TestCase):
                         "body"
                     ],
                 )
+
+    def test_cli_secret_flags_are_removed_at_both_boundaries(self):
+        from uuid import uuid4
+
+        for flag in (
+            "--password",
+            "--secret",
+            "--client-secret",
+            "--api-key",
+            "--token",
+            "-p",
+            "-P",
+            "--user",
+        ):
+            for separator in (" ", "\t", "\n", "="):
+                raw = f"Command failed: login {flag}{separator}'sensitive-canary' --other flag"
+                with self.subTest(flag=flag, separator=separator):
+                    title, text, _, _ = policy.prepare(submission(body=raw))
+                    self.assertNotIn("canary", text)
+                    self.assertNotIn(
+                        "canary",
+                        policy.payload({"id": uuid4(), "title": title, "body": raw})[
+                            "body"
+                        ],
+                    )
