@@ -146,6 +146,8 @@ class PolicyTests(unittest.TestCase):
             "client secret",
             "DATABASE_PASSWORD",
             "AWS_SECRET_ACCESS_KEY",
+            "secretAccessKey",
+            "sessionToken",
             "AWS_SESSION_TOKEN",
             "AZURE_CLIENT_SECRET",
             "OPENAI_API_KEY",
@@ -224,3 +226,12 @@ class PolicyTests(unittest.TestCase):
                     )
                     self.assertEqual(policy.scrub(text), text)
                 raw = json.dumps(raw)
+
+    def test_assignment_scanning_has_bounded_work_on_long_nonassignments(self):
+        import time
+
+        started = time.monotonic()
+        for value in ("secret_" * 570, "secret " * 570, "x" * 4000):
+            self.assertEqual(policy.scrub(value), value.strip())
+            self.assertNotIn("canary", policy.scrub(value + " PASSWORD=canary"))
+        self.assertLess(time.monotonic() - started, 2)

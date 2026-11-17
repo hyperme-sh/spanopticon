@@ -206,7 +206,6 @@ class Store:
         }
 
     def submit(self, p, request_id, body, repository):
-        title, text, fingerprint, spam = policy.prepare(body)
         with self.transaction(p.tenant) as db:
             self.member(db, p, submitter=True)
             scope = (p.tenant, p.issuer, p.subject, p.device)
@@ -225,6 +224,7 @@ class Store:
                 scope[:3],
             ).fetchone():
                 raise Refusal(409, "Deletion blocks new intake")
+            title, text, fingerprint, spam = policy.prepare(body)
             prior = db.execute(
                 "SELECT * FROM feedback.report WHERE tenant=%s AND issuer=%s AND subject=%s AND device=%s AND request_id=%s",
                 (*scope, request_id),

@@ -45,14 +45,41 @@ class Reconcile(Input):
 EXCERPT = re.compile(
     r"(?is)\b(?:prompt(?: body)?|file contents?|clipboard|conversation|source code)\s*:.*\Z"
 )
-# A recognized secret label discards the remaining excerpt, including multiline
-# YAML/JSON values. Guessing the end of an arbitrary pasted value is unsafe.
-SECRET_FIELD = r"""(?isx)["']?(?<![a-zA-Z0-9])(?:[a-zA-Z0-9]+[_-])*(?:password|passphrase|passwd|api[_ -]?key|(?:(?:access|refresh|auth|id)[_ -]?)?token|client[_ -]?secret|secret(?:[_ -]?key)?|credential|private[_ -]?key|(?:proxy-)?authorization|(?:set-)?cookie|serial(?:[ _-]number)?|prompt(?:[ _-]body)?|file(?:[ _-]contents?)?|clipboard|conversation|source[ _-]code)(?:[_-][a-zA-Z0-9]+)*\b["']?\s*[:=]\s*.*\Z"""
+# Match assignment labels once, without repartitioning namespace components.
+# Possessive label scanning prevents backtracking through long pasted names.
+ASSIGNMENT = re.compile(r"""(?<![\w-])["']?([A-Za-z][A-Za-z0-9_ -]*+)["']?\s*[:=]""")
+SECRET_NAMES = (
+    "password",
+    "passphrase",
+    "passwd",
+    "apikey",
+    "token",
+    "secret",
+    "credential",
+    "privatekey",
+    "authorization",
+    "cookie",
+    "serial",
+    "prompt",
+    "filecontents",
+    "clipboard",
+    "conversation",
+    "sourcecode",
+)
+
+
+def scrub_assignments(text):
+    for match in ASSIGNMENT.finditer(text):
+        label = re.sub(r"[_ -]", "", match[1]).casefold()
+        if label == "file" or any(name in label for name in SECRET_NAMES):
+            # Discard the whole remaining excerpt, including multiline values.
+            return text[: match.start()] + "[secret removed]"
+    return text
+
 
 REDACTIONS = [
     (r"(?s)```.*?(?:```|\Z)", "[excerpt removed]"),
     (r"(?is)-----BEGIN [^-]*PRIVATE KEY-----.*", "[secret removed]"),
-    (SECRET_FIELD, "[secret removed]"),
     (r"(?i)\bbearer\s+\S+", "[secret removed]"),
     (
         r"\b(?:gh[pousr]_[A-Za-z0-9_]+|github_pat_[A-Za-z0-9_]+|sk-[A-Za-z0-9_-]+)\b",
@@ -80,6 +107,7 @@ def scrub(value):
     text = EXCERPT.sub("\n[excerpt removed]", text)
     for pattern, replacement in REDACTIONS:
         text = re.sub(pattern, replacement, text)
+    text = scrub_assignments(text)
     # HTML and markdown embeds are not needed in the plain-text intake schema.
     text = text.replace("<", "‹").replace(">", "›")
     return text.strip()
