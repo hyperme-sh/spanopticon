@@ -169,3 +169,6 @@ Retained report content is capped at 16 MiB/4,096 rows per subject and
 256 MiB/65,536 rows per tenant, including pending cleanup metadata. New reports
 receive 429 when capacity is exhausted; existing export/deletion remain available.
 Normalized stored titles and bodies remain capped at 160 and 4,000 characters.
+
+Pasted CLI argument tails are discarded from the first short or long option,
+including joined values; tool-specific aliases cannot safely identify secrets.

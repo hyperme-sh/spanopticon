@@ -290,3 +290,19 @@ class PolicyTests(unittest.TestCase):
                             "body"
                         ],
                     )
+
+    def test_arbitrary_cli_aliases_and_joined_values_are_removed(self):
+        from uuid import uuid4
+
+        for raw in (
+            "redis-cli -a sensitive-canary",
+            "redis-cli -asensitive-canary",
+            "client -Z sensitive-canary",
+            "tool --custom-auth sensitive-canary",
+        ):
+            title, text, _, _ = policy.prepare(submission(body=raw))
+            self.assertNotIn("canary", text)
+            self.assertNotIn(
+                "canary",
+                policy.payload({"id": uuid4(), "title": title, "body": raw})["body"],
+            )

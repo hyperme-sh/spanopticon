@@ -48,7 +48,7 @@ EXCERPT = re.compile(
 # Match assignment labels once, without repartitioning namespace components.
 # Possessive label scanning prevents backtracking through long pasted names.
 ASSIGNMENT = re.compile(r"""(?<![\w-])["']?([A-Za-z][A-Za-z0-9_ -]*+)["']?\s*[:=]""")
-SECRET_FLAG = re.compile(r"(?<![\w-])--?([A-Za-z][A-Za-z0-9_-]*+)(?:\s+|=)")
+SECRET_FLAG = re.compile(r"(?<![\w-])--?[A-Za-z]")
 SECRET_NAMES = (
     "password",
     "passphrase",
@@ -77,13 +77,10 @@ SECRET_NAMES = (
 
 
 def scrub_assignments(text):
-    for match in SECRET_FLAG.finditer(text):
-        label = re.sub(r"[_-]", "", match[1]).casefold()
-        if label in ("p", "u", "user", "username") or any(
-            name in label for name in SECRET_NAMES
-        ):
-            text = text[: match.start()] + "[secret removed]"
-            break
+    # Tool-specific short flags can carry secrets (including joined values).
+    # Discard all CLI argument tails rather than guessing each tool's aliases.
+    if match := SECRET_FLAG.search(text):
+        text = text[: match.start()] + "[secret removed]"
     for match in ASSIGNMENT.finditer(text):
         label = re.sub(r"[_ -]", "", match[1]).casefold()
         if label == "file" or any(name in label for name in SECRET_NAMES):
