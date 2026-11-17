@@ -242,3 +242,26 @@ class PolicyTests(unittest.TestCase):
         )
         self.assertLessEqual(len(title), 160)
         self.assertLessEqual(len(body), 4000)
+
+    def test_connection_strings_and_uri_credentials_are_removed(self):
+        from uuid import uuid4
+
+        for raw in (
+            "DATABASE_URL=postgresql://alice:sensitive-canary@localhost/app",
+            "Details redis://alice:sensitive-canary@localhost/0",
+            "Details mongodb+srv://alice:sensitive-canary@localhost/app",
+            "Details amqps://alice:sensitive-canary@localhost/app",
+            "ConnectionString=Server=localhost;User Id=alice;Pwd=sensitive-canary",
+            "DSN=host=localhost user=alice password=sensitive-canary",
+            "Server=localhost;Pwd=sensitive-canary",
+            "AccountKey=sensitive-canary",
+        ):
+            with self.subTest(raw=raw):
+                title, text, _, _ = policy.prepare(submission(body=raw))
+                self.assertNotIn("canary", text)
+                self.assertNotIn(
+                    "canary",
+                    policy.payload({"id": uuid4(), "title": title, "body": raw})[
+                        "body"
+                    ],
+                )
