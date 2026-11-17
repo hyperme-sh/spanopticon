@@ -112,7 +112,10 @@ REDACTIONS = [
 
 def scrub(value):
     text = unicodedata.normalize("NFKC", value)
-    text = "".join(c for c in text if c in "\n\t" or unicodedata.category(c)[0] != "C")
+    # Removing only control bytes can join tokens or leave terminal-sequence
+    # fragments that hide credential boundaries. Do not keep such excerpts.
+    if any(c not in "\n\t" and unicodedata.category(c)[0] == "C" for c in text):
+        return "[control excerpt removed]"
     # Logs often contain JSON quoted inside JSON. Remove quote escaping before
     # matching labels; repeated scrub calls must not reveal another layer.
     text = re.sub(r"\\+(?=[\"'])", "", text)

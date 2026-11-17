@@ -172,3 +172,6 @@ Normalized stored titles and bodies remain capped at 160 and 4,000 characters.
 
 Pasted CLI argument tails are discarded from the first short or long option,
 including joined values; tool-specific aliases cannot safely identify secrets.
+
+Fields containing control or invisible format characters other than newline/tab
+are discarded as a whole. Terminal escape fragments are never retained.

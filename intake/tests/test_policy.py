@@ -306,3 +306,22 @@ class PolicyTests(unittest.TestCase):
                 "canary",
                 policy.payload({"id": uuid4(), "title": title, "body": raw})["body"],
             )
+
+    def test_terminal_and_invisible_controls_discard_the_excerpt(self):
+        from uuid import uuid4
+
+        for control in (
+            "\x1b[31m",
+            "\x9b31m",
+            "\x1b]0;title\x07",
+            "\b",
+            "\u200b",
+            "\u202e",
+        ):
+            raw = f"redis-cli {control}-a sensitive-canary\x1b[0m"
+            title, text, _, _ = policy.prepare(submission(body=raw))
+            self.assertEqual(text, "[control excerpt removed]")
+            self.assertNotIn(
+                "canary",
+                policy.payload({"id": uuid4(), "title": title, "body": raw})["body"],
+            )
