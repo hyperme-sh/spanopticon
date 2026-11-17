@@ -145,6 +145,9 @@ class PolicyTests(unittest.TestCase):
             "access-token",
             "client secret",
             "DATABASE_PASSWORD",
+            "AWS_SECRET_ACCESS_KEY",
+            "AWS_SESSION_TOKEN",
+            "AZURE_CLIENT_SECRET",
             "OPENAI_API_KEY",
             "SERVICE_AUTH_TOKEN",
             "DATABASE-PASSWORD",
@@ -202,3 +205,22 @@ class PolicyTests(unittest.TestCase):
                     ):
                         self.assertNotIn("canary", value)
                     self.assertEqual(policy.scrub(text), text)
+
+    def test_escaped_compound_secret_labels_are_removed(self):
+        import json
+        from uuid import uuid4
+
+        for key in ("password", "AWS_SECRET_ACCESS_KEY", "SERVICE_AUTH_TOKEN"):
+            raw = json.dumps({key: "sensitive-canary"})
+            for depth in range(4):
+                with self.subTest(key=key, depth=depth):
+                    title, text, _, _ = policy.prepare(submission(body=raw))
+                    self.assertNotIn("canary", text)
+                    self.assertNotIn(
+                        "canary",
+                        policy.payload({"id": uuid4(), "title": title, "body": raw})[
+                            "body"
+                        ],
+                    )
+                    self.assertEqual(policy.scrub(text), text)
+                raw = json.dumps(raw)

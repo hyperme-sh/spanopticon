@@ -47,7 +47,7 @@ EXCERPT = re.compile(
 )
 # A recognized secret label discards the remaining excerpt, including multiline
 # YAML/JSON values. Guessing the end of an arbitrary pasted value is unsafe.
-SECRET_FIELD = r"""(?isx)["']?(?<![a-zA-Z0-9])(?:[a-zA-Z0-9]+[_-])*(?:password|passphrase|passwd|api[_ -]?key|(?:(?:access|refresh|auth|id)[_ -]?)?token|client[_ -]?secret|secret(?:[_ -]?key)?|credential|private[_ -]?key|(?:proxy-)?authorization|(?:set-)?cookie|serial(?:[ _-]number)?|prompt(?:[ _-]body)?|file(?:[ _-]contents?)?|clipboard|conversation|source[ _-]code)\b["']?\s*[:=]\s*.*\Z"""
+SECRET_FIELD = r"""(?isx)["']?(?<![a-zA-Z0-9])(?:[a-zA-Z0-9]+[_-])*(?:password|passphrase|passwd|api[_ -]?key|(?:(?:access|refresh|auth|id)[_ -]?)?token|client[_ -]?secret|secret(?:[_ -]?key)?|credential|private[_ -]?key|(?:proxy-)?authorization|(?:set-)?cookie|serial(?:[ _-]number)?|prompt(?:[ _-]body)?|file(?:[ _-]contents?)?|clipboard|conversation|source[ _-]code)(?:[_-][a-zA-Z0-9]+)*\b["']?\s*[:=]\s*.*\Z"""
 
 REDACTIONS = [
     (r"(?s)```.*?(?:```|\Z)", "[excerpt removed]"),
@@ -74,6 +74,9 @@ REDACTIONS = [
 def scrub(value):
     text = unicodedata.normalize("NFKC", value)
     text = "".join(c for c in text if c in "\n\t" or unicodedata.category(c)[0] != "C")
+    # Logs often contain JSON quoted inside JSON. Remove quote escaping before
+    # matching labels; repeated scrub calls must not reveal another layer.
+    text = re.sub(r"\\+(?=[\"'])", "", text)
     text = EXCERPT.sub("\n[excerpt removed]", text)
     for pattern, replacement in REDACTIONS:
         text = re.sub(pattern, replacement, text)
