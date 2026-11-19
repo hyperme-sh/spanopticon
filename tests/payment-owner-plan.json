@@ -1,0 +1,518 @@
+{
+  "schema_version": 1,
+  "active": false,
+  "environment": {
+    "id": "/subscriptions/00000000-0000-4000-8000-000000000000/resourceGroups/rg-unit/providers/Microsoft.App/managedEnvironments/cae-unit-private",
+    "name": "cae-unit-private",
+    "private": true,
+    "subnet": "10.14.2.0/24",
+    "resource_group": "rg-unit"
+  },
+  "apps": {
+    "payment": {
+      "name": "pano-payment-prod",
+      "image": "acrfybercg47.azurecr.io/payment-service:v1.2.3",
+      "identity_id": "/subscriptions/00000000-0000-4000-8000-000000000000/resourceGroups/rg-unit/providers/Microsoft.ManagedIdentity/userAssignedIdentities/id-payment",
+      "secrets": {
+        "database-url": {
+          "key_vault_secret_id": "https://kv-fyber-cg47.vault.azure.net/secrets/unit-payment-database-url",
+          "identity": "/subscriptions/00000000-0000-4000-8000-000000000000/resourceGroups/rg-unit/providers/Microsoft.ManagedIdentity/userAssignedIdentities/id-payment"
+        },
+        "plane-payment": {
+          "key_vault_secret_id": "https://kv-fyber-cg47.vault.azure.net/secrets/panopticon-prod-plane-payment",
+          "identity": "/subscriptions/00000000-0000-4000-8000-000000000000/resourceGroups/rg-unit/providers/Microsoft.ManagedIdentity/userAssignedIdentities/id-payment"
+        },
+        "user-payment-read": {
+          "key_vault_secret_id": "https://kv-fyber-cg47.vault.azure.net/secrets/panopticon-prod-user-payment-read",
+          "identity": "/subscriptions/00000000-0000-4000-8000-000000000000/resourceGroups/rg-unit/providers/Microsoft.ManagedIdentity/userAssignedIdentities/id-payment"
+        }
+      },
+      "env": {
+        "DATABASE_URL": {
+          "secret_name": "database-url"
+        },
+        "HYPERMESH_TAKE_BPS_P1": {
+          "value": "1200"
+        },
+        "HYPERMESH_TAKE_BPS_P2": {
+          "value": "1800"
+        },
+        "PAYMENT_USD_STRIPE_ACCOUNT_ID": {
+          "value": "acct_1UK9ZiII1ye3hq27"
+        },
+        "PAYMENT_CONNECT_PLATFORM_ID": {
+          "value": "acct_1UK9ZiII1ye3hq27"
+        },
+        "PAYMENT_USD_BUSINESS_PRODUCT_ID": {
+          "value": "prod_hypermesh_reserved_compute_business"
+        },
+        "PAYMENT_USD_PERSONAL_PRODUCT_ID": {
+          "value": "prod_hypermesh_reserved_compute_personal"
+        },
+        "PAYMENT_USD_CHECKOUT_RETURN_URL": {
+          "value": "https://portal.hyperme.sh/dashboard/hypermesh/renter/checkout/return"
+        },
+        "PAYMENT_CONNECT_RETURN_URL": {
+          "value": "https://portal.hyperme.sh/dashboard/hypermesh/host/payouts/return"
+        },
+        "PAYMENT_CONNECT_REFRESH_URL": {
+          "value": "https://portal.hyperme.sh/dashboard/hypermesh/host/payouts/refresh"
+        },
+        "PAYMENT_HOST_PAYOUT_METHOD": {
+          "value": "fiat_bank"
+        },
+        "PAYMENT_CONNECT_TRANSFER_SOURCE_ALLOWLIST": {
+          "value": "stablecoin,card"
+        },
+        "STRIPE_PUBLISHABLE_KEY": {
+          "value": "pk_live_51UK9ZiII1ye3hq27RtLt8fJOgujkZKBCcygsigsnX77AQvPCe5J9tg10ZyULOxXRkpjdy9V9VkLOXOLDZwc1CTZo00eH8CIgFo"
+        },
+        "PAYMENT_USD_CHECKOUT_ENABLED": {
+          "value": "false"
+        },
+        "PAYMENT_USD_RECONCILIATION_ENABLED": {
+          "value": "false"
+        },
+        "PAYMENT_USD_CHECKOUT_LIVEMODE": {
+          "value": "false"
+        },
+        "PAYMENT_CONNECT_ENABLED": {
+          "value": "false"
+        },
+        "PAYMENT_CONNECT_TRANSFERS_ENABLED": {
+          "value": "false"
+        },
+        "PAYMENT_CONNECT_LIVE_TRANSFERS_ENABLED": {
+          "value": "false"
+        },
+        "PAYMENT_CONNECT_LIVE_BANK_PAYOUTS_ENABLED": {
+          "value": "false"
+        },
+        "PAYMENT_CONNECT_EMBEDDED_ENABLED": {
+          "value": "false"
+        },
+        "PAYMENT_USD_LEASE_QUOTES_ENABLED": {
+          "value": "false"
+        },
+        "PAYMENT_PLANE_EVENT_TOKEN_SECRET_FILE": {
+          "value": "/run/payment-events/plane-payment/producer.token"
+        },
+        "PAYMENT_USER_EVENT_TOKEN_SECRET_FILE": {
+          "value": "/run/payment-events/user-payment-read/producer.token"
+        }
+      },
+      "secret_files": {
+        "plane-payment": {
+          "mount_path": "/run/payment-events/plane-payment",
+          "filename": "producer.token"
+        },
+        "user-payment-read": {
+          "mount_path": "/run/payment-events/user-payment-read",
+          "filename": "producer.token"
+        }
+      },
+      "port": 8000,
+      "probe_port": 8000,
+      "probes": {
+        "liveness": "/api/v1/health/",
+        "readiness": "/api/v1/health/"
+      },
+      "min_replicas": 1,
+      "max_replicas": 2,
+      "cpu": 0.5,
+      "memory": "1Gi",
+      "database": {
+        "hostname": "unit-private.postgres.database.azure.com",
+        "name": "payment",
+        "runtime_role": "payment_runtime",
+        "migration_role": "payment_migration",
+        "runtime_limit": 100,
+        "migration_limit": 2
+      },
+      "dependencies": [
+        "keycloak"
+      ]
+    },
+    "plane": {
+      "name": "pano-plane-prod",
+      "image": "acrfybercg47.azurecr.io/hypermesh-plane:v1.2.3",
+      "identity_id": "/subscriptions/00000000-0000-4000-8000-000000000000/resourceGroups/rg-unit/providers/Microsoft.ManagedIdentity/userAssignedIdentities/id-plane",
+      "secrets": {
+        "database-url": {
+          "key_vault_secret_id": "https://kv-fyber-cg47.vault.azure.net/secrets/unit-plane-database-url",
+          "identity": "/subscriptions/00000000-0000-4000-8000-000000000000/resourceGroups/rg-unit/providers/Microsoft.ManagedIdentity/userAssignedIdentities/id-plane"
+        },
+        "ticket-signing-key": {
+          "key_vault_secret_id": "https://kv-fyber-cg47.vault.azure.net/secrets/panopticon-prod-ticket-ed25519-key",
+          "identity": "/subscriptions/00000000-0000-4000-8000-000000000000/resourceGroups/rg-unit/providers/Microsoft.ManagedIdentity/userAssignedIdentities/id-plane"
+        },
+        "payment-producers": {
+          "key_vault_secret_id": "https://kv-fyber-cg47.vault.azure.net/secrets/panopticon-prod-plane-payment-producers",
+          "identity": "/subscriptions/00000000-0000-4000-8000-000000000000/resourceGroups/rg-unit/providers/Microsoft.ManagedIdentity/userAssignedIdentities/id-plane"
+        },
+        "plane-payment": {
+          "key_vault_secret_id": "https://kv-fyber-cg47.vault.azure.net/secrets/panopticon-prod-plane-payment",
+          "identity": "/subscriptions/00000000-0000-4000-8000-000000000000/resourceGroups/rg-unit/providers/Microsoft.ManagedIdentity/userAssignedIdentities/id-plane"
+        }
+      },
+      "env": {
+        "DATABASE_URL": {
+          "secret_name": "database-url"
+        },
+        "PAYMENT_LEASE_CHECKOUT_TIMEOUT_SECONDS": {
+          "value": "3600"
+        },
+        "HYPERMESH_TICKET_ED25519_PRIVATE_KEY_FILE": {
+          "value": "/run/ticket-keys/signing.key"
+        },
+        "EVENT_PRODUCER_TOKENS_FILE": {
+          "value": "/run/payment-events/payment-producers/producers.json"
+        },
+        "HYPERMESH_EVENT_PRODUCER_TOKEN_FILE": {
+          "value": "/run/payment-events/plane-payment/producer.token"
+        },
+        "HYPERMESH_LEASE_OUTCOME_URL": {
+          "value": "https://payment.private.example/api/v1/payments/internal/lease-outcomes"
+        }
+      },
+      "secret_files": {
+        "ticket-signing-key": {
+          "mount_path": "/run/ticket-keys",
+          "filename": "signing.key"
+        },
+        "payment-producers": {
+          "mount_path": "/run/payment-events/payment-producers",
+          "filename": "producers.json"
+        },
+        "plane-payment": {
+          "mount_path": "/run/payment-events/plane-payment",
+          "filename": "producer.token"
+        }
+      },
+      "port": 8000,
+      "probe_port": 8000,
+      "probes": {
+        "liveness": "/api/v1/health/",
+        "readiness": "/api/v1/health/"
+      },
+      "min_replicas": 1,
+      "max_replicas": 2,
+      "cpu": 0.5,
+      "memory": "1Gi",
+      "database": {
+        "hostname": "unit-private.postgres.database.azure.com",
+        "name": "plane",
+        "runtime_role": "plane_runtime",
+        "migration_role": "plane_migration",
+        "runtime_limit": 12,
+        "migration_limit": 2
+      },
+      "dependencies": [
+        "keycloak"
+      ]
+    },
+    "user": {
+      "name": "pano-user-prod",
+      "image": "acrfybercg47.azurecr.io/user-service:v1.2.3",
+      "identity_id": "/subscriptions/00000000-0000-4000-8000-000000000000/resourceGroups/rg-unit/providers/Microsoft.ManagedIdentity/userAssignedIdentities/id-user",
+      "secrets": {
+        "database-url": {
+          "key_vault_secret_id": "https://kv-fyber-cg47.vault.azure.net/secrets/unit-user-database-url",
+          "identity": "/subscriptions/00000000-0000-4000-8000-000000000000/resourceGroups/rg-unit/providers/Microsoft.ManagedIdentity/userAssignedIdentities/id-user"
+        },
+        "payment-producers": {
+          "key_vault_secret_id": "https://kv-fyber-cg47.vault.azure.net/secrets/panopticon-prod-user-payment-producers",
+          "identity": "/subscriptions/00000000-0000-4000-8000-000000000000/resourceGroups/rg-unit/providers/Microsoft.ManagedIdentity/userAssignedIdentities/id-user"
+        },
+        "user-payment-read": {
+          "key_vault_secret_id": "https://kv-fyber-cg47.vault.azure.net/secrets/panopticon-prod-user-payment-read",
+          "identity": "/subscriptions/00000000-0000-4000-8000-000000000000/resourceGroups/rg-unit/providers/Microsoft.ManagedIdentity/userAssignedIdentities/id-user"
+        }
+      },
+      "env": {
+        "DATABASE_URL": {
+          "secret_name": "database-url"
+        },
+        "EVENT_PRODUCER_TOKENS_FILE": {
+          "value": "/run/payment-events/payment-producers/producers.json"
+        },
+        "PAYMENT_USER_EVENT_TOKEN": {
+          "secret_name": "user-payment-read"
+        },
+        "PAYMENT_SERVICE_URL": {
+          "value": "https://payment.private.example"
+        }
+      },
+      "secret_files": {
+        "payment-producers": {
+          "mount_path": "/run/payment-events/payment-producers",
+          "filename": "producers.json"
+        }
+      },
+      "port": 8000,
+      "probe_port": 8000,
+      "probes": {
+        "liveness": "/api/v1/health/",
+        "readiness": "/api/v1/health/"
+      },
+      "min_replicas": 1,
+      "max_replicas": 2,
+      "cpu": 0.5,
+      "memory": "1Gi",
+      "database": {
+        "hostname": "unit-private.postgres.database.azure.com",
+        "name": "user",
+        "runtime_role": "user_runtime",
+        "migration_role": "user_migration",
+        "runtime_limit": 12,
+        "migration_limit": 2
+      },
+      "dependencies": [
+        "keycloak"
+      ]
+    }
+  },
+  "workers": {
+    "payment": {
+      "name": "pano-payment-worker-prod",
+      "image": "acrfybercg47.azurecr.io/payment-service:v1.2.3",
+      "identity_id": "/subscriptions/00000000-0000-4000-8000-000000000000/resourceGroups/rg-unit/providers/Microsoft.ManagedIdentity/userAssignedIdentities/id-payment-worker",
+      "secrets": {
+        "database-url": {
+          "key_vault_secret_id": "https://kv-fyber-cg47.vault.azure.net/secrets/unit-payment-database-url",
+          "identity": "/subscriptions/00000000-0000-4000-8000-000000000000/resourceGroups/rg-unit/providers/Microsoft.ManagedIdentity/userAssignedIdentities/id-payment-worker"
+        }
+      },
+      "env": {
+        "PAYMENT_USD_CHECKOUT_ENABLED": {
+          "value": "false"
+        },
+        "PAYMENT_USD_RECONCILIATION_ENABLED": {
+          "value": "false"
+        },
+        "PAYMENT_USD_CHECKOUT_LIVEMODE": {
+          "value": "false"
+        },
+        "PAYMENT_CONNECT_ENABLED": {
+          "value": "false"
+        },
+        "PAYMENT_CONNECT_TRANSFERS_ENABLED": {
+          "value": "false"
+        },
+        "PAYMENT_CONNECT_LIVE_TRANSFERS_ENABLED": {
+          "value": "false"
+        },
+        "PAYMENT_CONNECT_LIVE_BANK_PAYOUTS_ENABLED": {
+          "value": "false"
+        },
+        "PAYMENT_CONNECT_EMBEDDED_ENABLED": {
+          "value": "false"
+        },
+        "PAYMENT_USD_LEASE_QUOTES_ENABLED": {
+          "value": "false"
+        },
+        "PAYMENT_USD_STRIPE_ACCOUNT_ID": {
+          "value": "acct_1UK9ZiII1ye3hq27"
+        },
+        "PAYMENT_CONNECT_PLATFORM_ID": {
+          "value": "acct_1UK9ZiII1ye3hq27"
+        },
+        "PAYMENT_USD_BUSINESS_PRODUCT_ID": {
+          "value": "prod_hypermesh_reserved_compute_business"
+        },
+        "PAYMENT_USD_PERSONAL_PRODUCT_ID": {
+          "value": "prod_hypermesh_reserved_compute_personal"
+        },
+        "PAYMENT_USD_CHECKOUT_RETURN_URL": {
+          "value": "https://portal.hyperme.sh/dashboard/hypermesh/renter/checkout/return"
+        },
+        "PAYMENT_CONNECT_RETURN_URL": {
+          "value": "https://portal.hyperme.sh/dashboard/hypermesh/host/payouts/return"
+        },
+        "PAYMENT_CONNECT_REFRESH_URL": {
+          "value": "https://portal.hyperme.sh/dashboard/hypermesh/host/payouts/refresh"
+        },
+        "PAYMENT_HOST_PAYOUT_METHOD": {
+          "value": "fiat_bank"
+        },
+        "PAYMENT_CONNECT_TRANSFER_SOURCE_ALLOWLIST": {
+          "value": "stablecoin,card"
+        },
+        "STRIPE_PUBLISHABLE_KEY": {
+          "value": "pk_live_51UK9ZiII1ye3hq27RtLt8fJOgujkZKBCcygsigsnX77AQvPCe5J9tg10ZyULOxXRkpjdy9V9VkLOXOLDZwc1CTZo00eH8CIgFo"
+        },
+        "HYPERMESH_TAKE_BPS_P1": {
+          "value": "1200"
+        },
+        "HYPERMESH_TAKE_BPS_P2": {
+          "value": "1800"
+        },
+        "PAYMENT_WORKER_HEALTH_PORT": {
+          "value": "8090"
+        },
+        "DATABASE_URL": {
+          "secret_name": "database-url"
+        }
+      },
+      "command": [
+        "/app/.venv/bin/python",
+        "/opt/payment-owner/entrypoint.py"
+      ],
+      "args": [
+        "/app/.venv/bin/python",
+        "-m",
+        "payment_service.worker"
+      ],
+      "probe_port": 8090,
+      "probe_path": "/healthz",
+      "replicas": 1,
+      "runtime_pool": 16,
+      "cpu": 0.5,
+      "memory": "1Gi"
+    }
+  },
+  "payment_events": {
+    "relays": {
+      "payment-paid-relay": {
+        "name": "pano-payment-paid-relay-prod",
+        "image": "acrfybercg47.azurecr.io/payment-service:v1.2.3",
+        "identity_id": "/subscriptions/00000000-0000-4000-8000-000000000000/resourceGroups/rg-unit/providers/Microsoft.ManagedIdentity/userAssignedIdentities/id-payment-payment-paid-relay",
+        "secrets": {
+          "source-db": {
+            "key_vault_secret_id": "https://kv-fyber-cg47.vault.azure.net/secrets/unit-payment-database-url",
+            "identity": "/subscriptions/00000000-0000-4000-8000-000000000000/resourceGroups/rg-unit/providers/Microsoft.ManagedIdentity/userAssignedIdentities/id-payment-payment-paid-relay"
+          },
+          "payment-plane": {
+            "key_vault_secret_id": "https://kv-fyber-cg47.vault.azure.net/secrets/panopticon-prod-payment-plane",
+            "identity": "/subscriptions/00000000-0000-4000-8000-000000000000/resourceGroups/rg-unit/providers/Microsoft.ManagedIdentity/userAssignedIdentities/id-payment-payment-paid-relay"
+          },
+          "payment-user": {
+            "key_vault_secret_id": "https://kv-fyber-cg47.vault.azure.net/secrets/panopticon-prod-payment-user",
+            "identity": "/subscriptions/00000000-0000-4000-8000-000000000000/resourceGroups/rg-unit/providers/Microsoft.ManagedIdentity/userAssignedIdentities/id-payment-payment-paid-relay"
+          },
+          "payment-archive": {
+            "key_vault_secret_id": "https://kv-fyber-cg47.vault.azure.net/secrets/panopticon-prod-payment-archive",
+            "identity": "/subscriptions/00000000-0000-4000-8000-000000000000/resourceGroups/rg-unit/providers/Microsoft.ManagedIdentity/userAssignedIdentities/id-payment-payment-paid-relay"
+          }
+        },
+        "secret_files": {
+          "source-db": {
+            "mount_path": "/run/payment-events/source-db",
+            "filename": "database.url"
+          },
+          "payment-plane": {
+            "mount_path": "/run/payment-events/payment-plane",
+            "filename": "producer.token"
+          },
+          "payment-user": {
+            "mount_path": "/run/payment-events/payment-user",
+            "filename": "producer.token"
+          },
+          "payment-archive": {
+            "mount_path": "/run/payment-events/payment-archive",
+            "filename": "producer.token"
+          }
+        },
+        "env": {},
+        "cpu": 0.25,
+        "memory": "0.5Gi",
+        "replicas": 1,
+        "command": [
+          "/app/.venv/bin/python",
+          "-I",
+          "-m",
+          "controlplane_events.http_relay"
+        ],
+        "args": [
+          "--database-url-file",
+          "/run/payment-events/source-db/database.url",
+          "--event-type",
+          "payment.succeeded.v3",
+          "--destination",
+          "https://plane.private.example/internal/events",
+          "--token-file",
+          "/run/payment-events/payment-plane/producer.token",
+          "--destination",
+          "https://user.private.example/internal/events",
+          "--token-file",
+          "/run/payment-events/payment-user/producer.token",
+          "--destination",
+          "https://archive.private.example/events",
+          "--token-file",
+          "/run/payment-events/payment-archive/producer.token"
+        ]
+      },
+      "payment-archive-relay": {
+        "name": "pano-payment-archive-relay-prod",
+        "image": "acrfybercg47.azurecr.io/payment-service:v1.2.3",
+        "identity_id": "/subscriptions/00000000-0000-4000-8000-000000000000/resourceGroups/rg-unit/providers/Microsoft.ManagedIdentity/userAssignedIdentities/id-payment-payment-archive-relay",
+        "secrets": {
+          "source-db": {
+            "key_vault_secret_id": "https://kv-fyber-cg47.vault.azure.net/secrets/unit-payment-database-url",
+            "identity": "/subscriptions/00000000-0000-4000-8000-000000000000/resourceGroups/rg-unit/providers/Microsoft.ManagedIdentity/userAssignedIdentities/id-payment-payment-archive-relay"
+          },
+          "payment-archive": {
+            "key_vault_secret_id": "https://kv-fyber-cg47.vault.azure.net/secrets/panopticon-prod-payment-archive",
+            "identity": "/subscriptions/00000000-0000-4000-8000-000000000000/resourceGroups/rg-unit/providers/Microsoft.ManagedIdentity/userAssignedIdentities/id-payment-payment-archive-relay"
+          }
+        },
+        "secret_files": {
+          "source-db": {
+            "mount_path": "/run/payment-events/source-db",
+            "filename": "database.url"
+          },
+          "payment-archive": {
+            "mount_path": "/run/payment-events/payment-archive",
+            "filename": "producer.token"
+          }
+        },
+        "env": {},
+        "cpu": 0.25,
+        "memory": "0.5Gi",
+        "replicas": 1,
+        "command": [
+          "/app/.venv/bin/python",
+          "-I",
+          "-m",
+          "controlplane_events.http_relay"
+        ],
+        "args": [
+          "--database-url-file",
+          "/run/payment-events/source-db/database.url",
+          "--exclude-event-type",
+          "payment.succeeded.v3",
+          "--destination",
+          "https://archive.private.example/events",
+          "--token-file",
+          "/run/payment-events/payment-archive/producer.token"
+        ]
+      }
+    },
+    "receiver_maps": {
+      "plane": {
+        "reference": "https://kv-fyber-cg47.vault.azure.net/secrets/panopticon-prod-plane-payment-producers",
+        "producer_references": {
+          "payment-service": "https://kv-fyber-cg47.vault.azure.net/secrets/panopticon-prod-payment-plane"
+        }
+      },
+      "user": {
+        "reference": "https://kv-fyber-cg47.vault.azure.net/secrets/panopticon-prod-user-payment-producers",
+        "producer_references": {
+          "payment-service": "https://kv-fyber-cg47.vault.azure.net/secrets/panopticon-prod-payment-user"
+        }
+      },
+      "archive": {
+        "reference": "https://kv-fyber-cg47.vault.azure.net/secrets/panopticon-prod-archive-payment-producers",
+        "producer_references": {
+          "payment-service": "https://kv-fyber-cg47.vault.azure.net/secrets/panopticon-prod-payment-archive"
+        }
+      }
+    }
+  },
+  "payment_portal_env": {
+    "NEXT_PUBLIC_HYPERMESH_CHECKOUT_BUYER_USE": "false"
+  },
+  "vm": {},
+  "resolved_images": {},
+  "admission_commands": {}
+}
