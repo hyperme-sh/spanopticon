@@ -101,9 +101,18 @@ class Context:
 
     def same_email_refusal(self):
         other=claims(self.other);selected=claims(self.broker)
-        assert other['email'].casefold()==self.config['owner']['profile']['email'].casefold()==selected['email'].casefold()
-        assert other['sub']!=selected['sub'] and other['iss']==selected['iss'] and other['aud']==selected['aud']
-        assert (other.get('entra_tenant_id'),other.get('entra_object_id'))!=(selected.get('entra_tenant_id'),selected.get('entra_object_id'))
+        binding = self.config['binding']
+        assert other['sub'] != selected['sub'] and other['iss'] == selected['iss'] and other['aud'] == selected['aud']
+        if binding.get('version') == 2:
+            # The fixtures' signed upstream mailbox can match while canonical
+            # Keycloak profile emails remain unique. Auth still verifies both tokens.
+            email = self.config['owner']['profile']['email']
+            assert other['startup_fixture_email'] == email == selected['startup_fixture_email']
+            assert other.get('login_provider') == selected.get('login_provider') == binding['oidc']['broker']
+            assert selected['sub'] == binding['oidc']['broker_subject']
+        else:
+            assert other['email'].casefold() == self.config['owner']['profile']['email'].casefold() == selected['email'].casefold()
+            assert (other.get('entra_tenant_id'), other.get('entra_object_id')) != (selected.get('entra_tenant_id'), selected.get('entra_object_id'))
         code,me=self.request(self.auth+'/auth/me',self.other)
         assert code==200 and me['sub']==other['sub']
         code,refusal=self.request(self.auth+'/auth/startup/identity',self.other)
