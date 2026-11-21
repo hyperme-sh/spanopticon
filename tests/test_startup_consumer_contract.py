@@ -12,9 +12,10 @@ from startup.contract import fingerprint
 ROOT=Path(__file__).resolve().parents[1]
 
 
-def token(subject,oid):
+def token(subject,oid,**overrides):
     config=json.loads((ROOT/'startup/fixtures/mapping.json').read_text())
     value={'sub':subject,'entra_tenant_id':'tenant','entra_object_id':oid,'email':config['owner']['profile']['email'],'iss':'issuer','aud':'client'}
+    value.update(overrides)
     return 'header.'+base64.urlsafe_b64encode(json.dumps(value).encode()).decode().rstrip('=')+'.signature'
 
 
@@ -96,6 +97,18 @@ class StartupConsumerContracts(unittest.TestCase):
             with self.assertRaises(AssertionError):c.same_email_refusal()
         c=context();c.other=c.broker
         with self.assertRaises(AssertionError):c.same_email_refusal()
+
+    def test_synthetic_same_email_requires_the_signed_test_claim_and_distinct_subjects(self):
+        c = context()
+        c.config['binding'].update(version=2, oidc={'broker': 'startup-nightly', 'broker_subject': 'broker'})
+        email = 'owner@startup-nightly.invalid'
+        c.config['owner']['profile']['email'] = email
+        c.broker = token('broker', None, login_provider='startup-nightly', startup_fixture_email=email)
+        c.other = token('other', None, login_provider='startup-nightly', startup_fixture_email=email)
+        c.same_email_refusal()
+        c.other = token('other', None, login_provider='startup-nightly', startup_fixture_email='unrelated@startup-nightly.invalid')
+        with self.assertRaises(AssertionError):
+            c.same_email_refusal()
 
     def test_grants_follow_each_independent_boolean(self):
         for keycloak in (False,True):
