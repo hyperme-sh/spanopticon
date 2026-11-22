@@ -85,7 +85,7 @@ def openapi(image, repository, revision, *, run=subprocess.run):
     code = f"import json; from {OWNERS[repository]}.app import app; print(json.dumps(app.openapi()))"
     exported = run(["docker", "run", "--rm", "--network", "none", "--read-only",
                     "--tmpfs", "/tmp:rw,nosuid,nodev,size=32m", "--cap-drop", "ALL",
-                    "--security-opt", "no-new-privileges", "--entrypoint", "/app/.venv/bin/python",
+                    "--security-opt", "no-new-privileges", "--entrypoint", "python",
                     image, "-I", "-B", "-c", code], check=True, capture_output=True, text=True, timeout=60)
     require(len(exported.stdout) <= 4 * 1024 * 1024, "Runtime API document is oversized")
     return json.loads(exported.stdout)
