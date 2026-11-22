@@ -44,6 +44,29 @@ class CommandTests(unittest.TestCase):
         owner('auth',self.config,{})
         self.assertEqual(calls[0].headers['Authorization'],'Bearer auth-private')
         self.assertEqual(json.loads(calls[0].data),{'mapping_sha256':fingerprint(self.config)})
+    def test_synthetic_owner_uses_only_private_transport_and_its_own_token(self):
+        routed = self.root / 'transport.py'
+        routed.touch()
+        scope = {'INFRA_CI_RUN': '123-1-startup-identity', 'NIGHTLY_LEASE_FENCE': '7',
+                 'NIGHTLY_LEASE_GENERATION': 'a' * 64, 'PATH': '/usr/bin'}
+        self.env.update(scope, STARTUP_OWNER_TRANSPORT=str(routed), GH_TOKEN='workflow-only')
+        config = self.config | {'binding': self.config['binding'] | {'version': 2}}
+        calls = []
+
+        def execute(argv, **kwargs):
+            calls.append(argv)
+            self.assertEqual(argv[1:], ['-I', str(routed), 'acl'])
+            self.assertEqual(json.loads(kwargs['input']), {'mapping_sha256': 's' * 64, 'token': 'acl-private'})
+            self.assertEqual(kwargs['env'], scope)
+            return SimpleNamespace(returncode=0, stdout='{"status":"reconciled"}')
+
+        with patch('startup.command.fingerprint', return_value='s' * 64):
+            owner = Owners(self.env, self.root / 'private/mapping.json', opener=object(), execute=execute)
+            self.assertEqual(owner('acl', config, {}), {'status': 'reconciled'})
+            with self.assertRaises(ValueError):
+                owner('acl', self.config, {})
+        self.assertEqual(len(calls), 1)
+
     def test_keycloak_gets_private_snapshot_and_no_peer_credentials(self):
         calls=[]
         def execute(command,**kwargs):
