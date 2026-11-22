@@ -169,10 +169,28 @@ def verify_accepted_record(root, repository, *, required=False, fetch=None, fetc
                 and "sha256:" + hashlib.sha256(raw).hexdigest() == expected[name],
                 "Published container provenance bytes differ from the stable asset")
         document = json.loads(raw)
-        require(isinstance(document, dict) and document.get("schema_version") == 1
-                and document.get("repository") == historical_repository
-                and document.get("revision") == revision
-                and document.get("version") == component["version"]
-                and document.get("artifact") == artifact,
+        canonical = (
+            isinstance(document, dict)
+            and type(document.get("schema_version")) is int
+            and document["schema_version"] == 1
+            and document.get("repository") == historical_repository
+            and document.get("revision") == revision
+            and document.get("version") == component["version"]
+            and document.get("artifact") == artifact
+        )
+        runtime_repository = "ghcr.io/" + historical_repository.lower() + "/runtime"
+        runtime_digest = "sha256:" + artifact["sha256"]
+        original_runtime = (
+            historical_repository in {"hyperme-sh/acl-service", "hyperme-sh/auth-service", "hyperme-sh/user-service"}
+            and name == "runtime.json"
+            and isinstance(document, dict)
+            and type(document.get("schema_version")) is int
+            and document == {
+                "schema_version": 1, "repository": runtime_repository,
+                "revision": revision, "version": tag, "digest": runtime_digest,
+            }
+            and artifact["uri"] == runtime_repository + "@" + runtime_digest
+        )
+        require(canonical or original_runtime,
                 "Stable container provenance does not bind the accepted image")
     return component["version"]
