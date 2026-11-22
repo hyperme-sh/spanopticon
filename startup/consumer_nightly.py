@@ -133,16 +133,28 @@ class Context:
                 assert allowed('/organizations/'+org['organization_id'],role)==(role in org['roles'])
         assert allowed('/platform/keycloak','admin') is False
         assert allowed('/organizations/'+self.fixture['foreign_organization_id'],'admin') is False
-        realm=quote(self.config['binding']['keycloak_admin']['realm'],safe='')
-        subject=quote(self.person['broker_subject'],safe='')
-        base=endpoint(self.env['KEYCLOAK_INTERNAL_URL'])+'/admin/realms/'+realm
-        admin=self.owners.tokens['keycloak_admin']
-        code,clients=self.request(base+'/clients?clientId=realm-management',admin)
-        assert code==200 and len(clients)==1 and clients[0]['clientId']=='realm-management'
-        management=quote(clients[0]['id'],safe='')
-        code,roles=self.request(base+'/users/'+subject+'/role-mappings/clients/'+management,admin)
-        assert code==200 and isinstance(roles,list)
-        assert any(r['name']=='realm-admin' for r in roles) is self.config['binding']['keycloak_admin']['enabled']
+        binding = self.config['binding']
+        target = endpoint(self.env['KEYCLOAK_INTERNAL_URL'])
+        credential = self.owners.tokens['keycloak_admin']
+        if binding['version'] == 2:
+            assert target == 'https://auth.test.hyperme.sh'
+            url = target + '/realms/controlplane/startup-nightly-observation'
+            code, observation = self.request(url, credential)
+            assert code == 200 and observation == {
+                'schema_version': 1, 'realm': 'controlplane',
+                'broker_subject': self.person['broker_subject'],
+                'upstream_subject': binding['oidc']['subject'], 'keycloak_admin': False,
+            }
+        else:
+            realm=quote(self.config['binding']['keycloak_admin']['realm'],safe='')
+            subject=quote(self.person['broker_subject'],safe='')
+            base=target+'/admin/realms/'+realm
+            code,clients=self.request(base+'/clients?clientId=realm-management',credential)
+            assert code==200 and len(clients)==1 and clients[0]['clientId']=='realm-management'
+            management=quote(clients[0]['id'],safe='')
+            code,roles=self.request(base+'/users/'+subject+'/role-mappings/clients/'+management,credential)
+            assert code==200 and isinstance(roles,list)
+            assert any(r['name']=='realm-admin' for r in roles) is self.config['binding']['keycloak_admin']['enabled']
         assert self.person['permissions']==[]
 
     def api_key_organization_isolation(self):

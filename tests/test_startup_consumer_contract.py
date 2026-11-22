@@ -110,6 +110,28 @@ class StartupConsumerContracts(unittest.TestCase):
         with self.assertRaises(AssertionError):
             c.same_email_refusal()
 
+    def test_synthetic_grant_observation_never_uses_realm_admin_routes(self):
+        c = context()
+        c.config['binding'].update(version=2, oidc={'subject': 'upstream'})
+        c.env['KEYCLOAK_INTERNAL_URL'] = 'https://auth.test.hyperme.sh'
+        c.owners.tokens['keycloak_admin'] = 'scoped-reader'
+        original = c.request
+        observation = {'schema_version': 1, 'realm': 'controlplane', 'broker_subject': 'broker',
+                       'upstream_subject': 'upstream', 'keycloak_admin': False}
+
+        def request(url, credential, body=None, headers=None):
+            if url == 'https://auth.test.hyperme.sh/realms/controlplane/startup-nightly-observation':
+                self.assertEqual(credential, 'scoped-reader')
+                return 200, observation
+            self.assertNotIn('/admin/', url)
+            return original(url, credential, body, headers)
+
+        c.request = request
+        c.independent_grant_boundaries()
+        observation['keycloak_admin'] = True
+        with self.assertRaises(AssertionError):
+            c.independent_grant_boundaries()
+
     def test_grants_follow_each_independent_boolean(self):
         for keycloak in (False,True):
             for platform in (False,True):
