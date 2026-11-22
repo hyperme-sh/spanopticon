@@ -50,12 +50,35 @@ class Owners:
         if self.secret_file:
             self.secret_file=str(Path(self.secret_file).resolve())
             if not private_file(self.secret_file).strip():raise ValueError('Configured Entra application secret required')
+        route = environment.get('STARTUP_OWNER_TRANSPORT')
+        self.transport = Path(route).resolve(strict=True) if route else None
+        self.transport_environment = None
+        if self.transport is not None:
+            if not self.transport.is_file():
+                raise ValueError('Private startup owner transport required')
+            self.transport_environment = {
+                name: environment[name] for name in (
+                    'INFRA_CI_RUN', 'STARTUP_OWNER_GENERATION', 'PATH',
+                )
+            }
         self.opener=opener or build_opener(NoRedirect())
         self.execute=execute
 
     def __call__(self,step,config,prior):
-        if step!='keycloak':
-            request=Request(self.urls[step]+PATHS[step],data=json.dumps({'mapping_sha256':fingerprint(config)}).encode(),
+        if step != 'keycloak':
+            stamp = fingerprint(config)
+            if self.transport is not None:
+                if config['binding']['version'] != 2:
+                    raise ValueError('Synthetic TEST owner transport requires its declared mapping')
+                completed = self.execute(
+                    [sys.executable, '-I', str(self.transport), step],
+                    input=json.dumps({'mapping_sha256': stamp, 'token': self.tokens[step]}),
+                    env=self.transport_environment, capture_output=True, text=True, timeout=45, check=False,
+                )
+                if completed.returncode or len(completed.stdout.encode()) > 65536:
+                    raise ValueError('Private TEST startup owner transport refused')
+                return json.loads(completed.stdout)
+            request=Request(self.urls[step]+PATHS[step],data=json.dumps({'mapping_sha256':stamp}).encode(),
                 headers={'Authorization':'Bearer '+self.tokens[step],'Content-Type':'application/json'},method='POST')
             with self.opener.open(request,timeout=30) as response:
                 raw=response.read(65537)
