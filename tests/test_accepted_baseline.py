@@ -145,6 +145,40 @@ class AcceptedBaselineTest(unittest.TestCase):
         self.assertNotEqual(self.provenance['assets']['container-provenance.json'], 'sha256:'+'e'*64)
         self.assertEqual(self.verify(), '0.24.0')
 
+    def test_first_owner_runtime_asset_binds_the_exact_stable_oci_digest(self):
+        repository = 'hyperme-sh/auth-service'
+        image = 'ghcr.io/' + repository + '/runtime'
+        sha = 'e' * 64
+        component = self.bundle['components'].pop('component')
+        self.bundle['line'] = '0.2'
+        component.update(version='0.2.0', artifact={
+            'kind': 'container', 'sha256': sha, 'uri': image + '@sha256:' + sha,
+        })
+        self.bundle['components']['auth-service'] = component
+        self.provenance.update(repository=repository, tag='v0.2.0', container_provenance_asset='runtime.json')
+        self.release['tag_name'] = 'v0.2.0'
+        self.reference['ref'] = 'refs/tags/v0.2.0'
+        self.extra = {f'repos/{repository}/releases/7': self.release,
+                      f'repos/{repository}/git/ref/tags/v0.2.0': self.reference}
+        (self.folder / 'release.json').write_text(json.dumps(self.bundle))
+        document = {'schema_version': 1, 'repository': image, 'revision': 'b' * 40,
+                    'version': 'v0.2.0', 'digest': 'sha256:' + sha}
+
+        def verify(contents):
+            raw = json.dumps(contents).encode()
+            digest = 'sha256:' + hashlib.sha256(raw).hexdigest()
+            self.provenance['assets'] = {'runtime.json': digest}
+            self.release['assets'] = [{'id': 11, 'name': 'runtime.json', 'digest': digest}]
+            (self.folder / 'provenance.json').write_text(json.dumps(self.provenance))
+            return verify_accepted_record(self.root, repository, fetch=self.fetch, fetch_asset=lambda *_: raw)
+
+        self.assertEqual(verify(document), '0.2.0')
+        for field, value in (('repository', image + '-other'), ('revision', 'c' * 40),
+                             ('version', 'v0.2.1'), ('digest', 'sha256:' + 'a' * 64),
+                             ('schema_version', True)):
+            with self.subTest(field=field), self.assertRaisesRegex(ValueError, 'does not bind'):
+                verify({**document, field: value})
+
     def test_container_provenance_must_bind_the_owner_source_version_and_image(self):
         original = self.container()
         for field, value in [('repository', 'other/component'), ('revision', 'c'*40),
