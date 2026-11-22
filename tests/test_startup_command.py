@@ -47,8 +47,8 @@ class CommandTests(unittest.TestCase):
     def test_synthetic_owner_uses_only_private_transport_and_its_own_token(self):
         routed = self.root / 'transport.py'
         routed.touch()
-        scope = {'INFRA_CI_RUN': '123-1-startup-identity', 'NIGHTLY_LEASE_FENCE': '7',
-                 'NIGHTLY_LEASE_GENERATION': 'a' * 64, 'PATH': '/usr/bin'}
+        scope = {'INFRA_CI_RUN': '123-1-startup-identity',
+                 'STARTUP_OWNER_GENERATION': 'a' * 64, 'PATH': '/usr/bin'}
         self.env.update(scope, STARTUP_OWNER_TRANSPORT=str(routed), GH_TOKEN='workflow-only')
         config = self.config | {'binding': self.config['binding'] | {'version': 2}}
         calls = []

@@ -58,7 +58,7 @@ class Owners:
                 raise ValueError('Private startup owner transport required')
             self.transport_environment = {
                 name: environment[name] for name in (
-                    'INFRA_CI_RUN', 'NIGHTLY_LEASE_FENCE', 'NIGHTLY_LEASE_GENERATION', 'PATH',
+                    'INFRA_CI_RUN', 'STARTUP_OWNER_GENERATION', 'PATH',
                 )
             }
         self.opener=opener or build_opener(NoRedirect())
