@@ -79,8 +79,11 @@ def openapi(image, repository, revision, *, run=subprocess.run):
     inspect = run(["docker", "image", "inspect", "--format", "{{json .Config.Labels}}", image],
                   check=True, capture_output=True, text=True, timeout=30)
     labels = json.loads(inspect.stdout)
-    require(labels.get("org.opencontainers.image.source") == f"https://github.com/{repository}"
-            and labels.get("org.opencontainers.image.revision") == revision,
+    source = labels.get("org.opencontainers.image.source")
+    source_matches = source == f"https://github.com/{repository}"
+    # Retained User images carry the revision but predate a source URL label.
+    source_matches |= repository == "hyperme-sh/user-service" and source is None
+    require(source_matches and labels.get("org.opencontainers.image.revision") == revision,
             "The OCI image does not identify the expected source revision")
     code = f"import json; from {OWNERS[repository]}.app import app; print(json.dumps(app.openapi()))"
     exported = run(["docker", "run", "--rm", "--network", "none", "--read-only",
