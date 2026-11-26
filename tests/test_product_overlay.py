@@ -26,6 +26,13 @@ class ProductOverlayTest(unittest.TestCase):
             with self.subTest(changes=changes), self.assertRaisesRegex(ValueError, error):
                 validate(self.overlay | changes)
 
+    def test_tenant_version_is_an_optional_stable_version(self):
+        for version in ("0.1.0", "2.5.19"):
+            validate(self.overlay | {"tenant_version": version})
+        for version in (None, 1, "01.2.3", "v1.2.3", "1.2.3-test.4", "1.2.3\n"):
+            with self.subTest(version=version), self.assertRaisesRegex(ValueError, "tenant_version"):
+                validate(self.overlay | {"tenant_version": version})
+
     def test_no_login_without_keycloak(self):
         self.overlay["services"] = ["plane"]
         with self.assertRaisesRegex(ValueError, "services differ"):

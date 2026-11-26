@@ -87,9 +87,14 @@ class RuntimeTests(unittest.TestCase):
         expected=self.root/'expected';raw=self.render()
         expected.write_bytes(r.canonical(r.kube_documents(raw)))
         script=Path(__file__).resolve().parents[1]/'scripts/helm_bundle_gate.py'
-        ok=subprocess.run([sys.executable,str(script),str(expected)],input=raw,capture_output=True)
-        self.assertEqual(ok.returncode,0,ok.stderr);self.assertEqual(ok.stdout,raw)
-        bad=subprocess.run([sys.executable,str(script),str(expected)],input=raw.replace(b'ghcr.io/example/api',b'ghcr.io/evil/api'),capture_output=True)
+        command=[sys.executable,str(script),str(expected),self.lock['candidate']]
+        ok=subprocess.run(command,input=raw,capture_output=True)
+        self.assertEqual(ok.returncode,0,ok.stderr)
+        deployment=next(i for i in r.kube_documents(ok.stdout) if i['kind']=='Deployment')
+        env=deployment['spec']['template']['spec']['containers'][0]['env']
+        self.assertEqual([entry['value'] for entry in env if entry['name']==r.BUNDLE_TAG_ENV],
+                         [self.lock['candidate']])
+        bad=subprocess.run(command,input=raw.replace(b'ghcr.io/example/api',b'ghcr.io/evil/api'),capture_output=True)
         self.assertNotEqual(bad.returncode,0);self.assertEqual(bad.stdout,b'')
 
     def test_yaml_alias_duplicate_and_unsafe_objects_rejected(self):
@@ -124,6 +129,16 @@ class RuntimeTests(unittest.TestCase):
         with patch.object(r,'command') as run,self.assertRaises(ValueError):
             r.deploy(self.layout,'helm','test-plane',ASSURANCE,self.output,context='kind-isolated',apply=True)
         run.assert_not_called();self.assertFalse(self.output.exists())
+
+    def test_compose_uses_verified_tag_over_asset_environment(self):
+        normalized=copy.deepcopy(self.compose)
+        normalized['services']['api']['environment'][r.BUNDLE_TAG_ENV]='incorrect-tag'
+        resolved=copy.deepcopy(normalized)
+        resolved['services']['api']['environment'][r.BUNDLE_TAG_ENV]=self.lock['candidate']
+        with patch.object(r,'command',side_effect=[encode(normalized),encode(resolved)]):
+            r.deploy(self.layout,'compose','test-plane',ASSURANCE,self.output,context='default')
+        frozen=json.loads((self.output/'compose.resolved.json').read_text())
+        self.assertEqual(frozen['services']['api']['environment'][r.BUNDLE_TAG_ENV],self.lock['candidate'])
 
     def test_normalized_compose_cannot_swap_images(self):
         rendered=copy.deepcopy(self.compose);rendered['services']['api']['image']='ghcr.io/evil/api@sha256:'+'d'*64

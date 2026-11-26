@@ -8,6 +8,8 @@ import re
 from urllib.parse import urlsplit
 from uuid import UUID
 
+from deployment.product_overlay import validate_tenant_version
+
 
 def identifier(value):
     if not re.fullmatch(r"[a-z0-9][a-z0-9-]{0,62}", value):
@@ -46,7 +48,7 @@ def compatibility_line(plane):
 
 
 def render(catalog):
-    outputs, routes = {}, {}
+    outputs, routes, versions = {}, {}, {}
     origins, realms = set(), set()
     for tenant in catalog["tenants"]:
         uid = str(UUID(tenant["id"]))
@@ -92,6 +94,9 @@ def render(catalog):
                 "schema_version": 1, "tenant_id": uid, **listener,
                 "peer_pins": sorted(peer["public_key"] for peer in peers),
             }
+        if "tenant_version" in tenant:
+            validate_tenant_version(tenant["tenant_version"])
+            versions[uid] = tenant["tenant_version"]
         login = tenant.get("login")
         if login is None:
             continue
@@ -150,6 +155,8 @@ def render(catalog):
     for files in outputs.values():
         if "portal.json" in files:
             files["portal.json"]["PORTAL_TENANT_ROUTES"] = json.dumps(routes)
+            if versions:
+                files["portal.json"]["PORTAL_TENANT_VERSIONS"] = json.dumps(versions)
     return outputs
 
 

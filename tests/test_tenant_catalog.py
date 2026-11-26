@@ -23,6 +23,20 @@ class TenantCatalogTest(unittest.TestCase):
         self.assertEqual(set(json.loads(portal["PORTAL_TENANT_ROUTES"])), {cedar["id"]})
         self.assertEqual(set(files[birch["id"]]), {"plane.json"})
 
+    def test_portal_receives_each_tenant_version_by_id(self):
+        cedar, birch = self.catalog["tenants"]
+        cedar["tenant_version"] = "1.4.0"
+        birch["tenant_version"] = "2.3.1"
+        del birch["login"]
+        files = render(self.catalog)[cedar["id"]]
+        self.assertEqual(json.loads(files["portal.json"]["PORTAL_TENANT_VERSIONS"]), {
+            cedar["id"]: "1.4.0", birch["id"]: "2.3.1",
+        })
+        self.assertNotIn("tenant_version", files["plane.json"])
+        birch["tenant_version"] = "test"
+        with self.assertRaisesRegex(ValueError, "tenant_version"):
+            render(self.catalog)
+
     def test_duplicate_uuid(self):
         first, second = self.catalog["tenants"]
         second["id"] = first["id"]
