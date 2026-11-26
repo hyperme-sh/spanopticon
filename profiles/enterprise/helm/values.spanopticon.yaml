@@ -1,0 +1,64 @@
+# Enable the services this deployment uses.
+services:
+  portal:
+    enabled: false
+    image: ghcr.io/hyperme-sh/controlplane-portal/runtime:test
+    port: 8080
+    configMap: portal-config
+    secret: portal-secrets
+    healthPath: /signed-out
+  edge:
+    enabled: false
+    image: ghcr.io/hyperme-sh/controlplane-edge/runtime:test
+    port: 8000
+    configMap: edge-config
+    secret: edge-secrets
+  auth:
+    enabled: false
+    image: ghcr.io/hyperme-sh/auth-service/runtime:test
+    port: 8000
+    configMap: auth-config
+    secret: auth-secrets
+  user:
+    enabled: false
+    image: ghcr.io/hyperme-sh/user-service/runtime:test
+    port: 8000
+    configMap: user-config
+    secret: user-secrets
+  acl:
+    enabled: false
+    image: ghcr.io/hyperme-sh/acl-service/runtime:test
+    port: 8000
+    configMap: acl-config
+    secret: acl-secrets
+  storage:
+    enabled: false
+    image: ghcr.io/hyperme-sh/controlplane-core/storage:test
+    port: 8000
+    configMap: storage-config
+    secret: storage-secrets
+  gateway:
+    enabled: false
+    image: ghcr.io/hyperme-sh/hypermesh-gateway/runtime:test
+    port: 8000
+    configMap: gateway-config
+    secret: gateway-secrets
+    healthPath: /api/v1/health/
+  plane:
+    enabled: false
+    image: ghcr.io/hyperme-sh/hypermesh-plane/runtime:test
+    port: 8000
+    configMap: plane-config
+    secret: plane-secrets
+  payment:
+    enabled: false
+    image: ghcr.io/hyperme-sh/payment-service/runtime:test
+    port: 8000
+    configMap: payment-config
+    secret: payment-secrets
+  verification:
+    enabled: false
+    image: ghcr.io/hyperme-sh/verification/runtime:test
+    port: 8000
+    configMap: verification-config
+    secret: verification-secrets

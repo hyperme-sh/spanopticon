@@ -1,0 +1,72 @@
+x-runtime: &runtime
+  pull_policy: always
+  restart: unless-stopped
+
+services:
+  portal:
+    <<: *runtime
+    profiles: [portal]
+    image: ${PORTAL_IMAGE:-ghcr.io/hyperme-sh/controlplane-portal/runtime:test}
+    env_file:
+      - ${SPANOPTICON_CONFIG_DIR:-./config}/portal.env
+    ports:
+      - "127.0.0.1:${PORTAL_WEB_PORT:-8081}:8080"
+    healthcheck:
+      test: [CMD, node, -e, "fetch('http://127.0.0.1:8080/signed-out').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+  edge:
+    <<: *runtime
+    profiles: [edge]
+    image: ${EDGE_IMAGE:-ghcr.io/hyperme-sh/controlplane-edge/runtime:test}
+    env_file:
+      - ${SPANOPTICON_CONFIG_DIR:-./config}/edge.env
+  auth:
+    <<: *runtime
+    profiles: [auth]
+    image: ${AUTH_IMAGE:-ghcr.io/hyperme-sh/auth-service/runtime:test}
+    env_file:
+      - ${SPANOPTICON_CONFIG_DIR:-./config}/auth.env
+  user:
+    <<: *runtime
+    profiles: [user]
+    image: ${USER_IMAGE:-ghcr.io/hyperme-sh/user-service/runtime:test}
+    env_file:
+      - ${SPANOPTICON_CONFIG_DIR:-./config}/user.env
+  acl:
+    <<: *runtime
+    profiles: [acl]
+    image: ${ACL_IMAGE:-ghcr.io/hyperme-sh/acl-service/runtime:test}
+    env_file:
+      - ${SPANOPTICON_CONFIG_DIR:-./config}/acl.env
+  storage:
+    <<: *runtime
+    profiles: [storage]
+    image: ${STORAGE_IMAGE:-ghcr.io/hyperme-sh/controlplane-core/storage:test}
+    env_file:
+      - ${SPANOPTICON_CONFIG_DIR:-./config}/storage.env
+  gateway:
+    <<: *runtime
+    profiles: [gateway]
+    image: ${GATEWAY_IMAGE:-ghcr.io/hyperme-sh/hypermesh-gateway/runtime:test}
+    env_file:
+      - ${SPANOPTICON_CONFIG_DIR:-./config}/gateway.env
+  plane:
+    <<: *runtime
+    profiles: [plane]
+    image: ${PLANE_IMAGE:-ghcr.io/hyperme-sh/hypermesh-plane/runtime:test}
+    env_file:
+      - ${SPANOPTICON_CONFIG_DIR:-./config}/plane.env
+  payment:
+    <<: *runtime
+    profiles: [payment]
+    image: ${PAYMENT_IMAGE:-ghcr.io/hyperme-sh/payment-service/runtime:test}
+    env_file:
+      - ${SPANOPTICON_CONFIG_DIR:-./config}/payment.env
+  verification:
+    <<: *runtime
+    profiles: [verification]
+    image: ${VERIFICATION_IMAGE:-ghcr.io/hyperme-sh/verification/runtime:test}
+    env_file:
+      - ${SPANOPTICON_CONFIG_DIR:-./config}/verification.env

@@ -1,0 +1,14 @@
+services:
+  s3rch-web:
+    image: ${S3RCH_WEB_IMAGE:-ghcr.io/fyberlabs/s3r.ch:test}
+    pull_policy: always
+    restart: unless-stopped
+    env_file:
+      - ${SPANOPTICON_CONFIG_DIR:-./config}/s3rch-web.env
+    ports:
+      - "127.0.0.1:${S3RCH_WEB_PORT:-8080}:8080"
+    volumes:
+      - s3rch-data:/app/data
+
+volumes:
+  s3rch-data:

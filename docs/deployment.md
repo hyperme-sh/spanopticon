@@ -91,6 +91,12 @@ does not authorize it.
 Runtime and minimum-profile checks are registered in Infra's `spanopticon-runtime`
 nightly adapter (infra #922). PRs run unit/contract and Helm rendering checks only.
 
+## Enterprise deployment configurations
+
+Use the [named Compose and Helm presets](../profiles/enterprise/README.md) to
+replicate s3r.ch or Hyperme.sh, or select the services for a generic Spanopticon
+deployment. Payment and Verification are optional.
+
 ## Enterprise Portal configuration
 
 The enterprise generator reads `deployment/enterprise-services.json`. Its Portal entry selects

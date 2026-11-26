@@ -1,0 +1,6 @@
+services:
+  hyperme-web:
+    enabled: true
+    image: acrfybercg47.azurecr.io/hypermesh/web:test
+    port: 8080
+    healthPath: /api/health

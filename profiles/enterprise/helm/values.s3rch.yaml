@@ -1,0 +1,12 @@
+services:
+  s3rch-web:
+    enabled: true
+    image: ghcr.io/fyberlabs/s3r.ch:test
+    port: 8080
+    healthPath: /api/health
+    configMap: s3rch-web-config
+    secret: s3rch-web-secrets
+    data:
+      existingClaim: s3rch-data
+      mountPath: /app/data
+      fsGroup: 1001
