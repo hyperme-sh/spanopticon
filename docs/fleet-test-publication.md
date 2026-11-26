@@ -108,6 +108,13 @@ Cleanup removes the task-owned namespace and Compose resources without deleting
 application volumes. Credentials and expanded runtime files stay outside the
 uploaded OCI artifact. A failure leaves no successful qualification record.
 
+A `portal` component uses the Portal owner's qualified image from
+`ghcr.io/hyperme-sh/controlplane-portal/runtime`. The main qualification workflow
+reads the running Portal's signed-out footer in both engines and after Helm
+upgrade. The footer must show the qualified image version and build and the exact
+candidate tag resolved for that deployment. Configure the Portal workload to
+serve its signed-out page on port 8080 in the disposable qualification job.
+
 This initial producer establishes readiness and upgrade of the selected assets.
 Owner build provenance, dependency compatibility, inter-service/business smoke,
 private image access and real provider behavior still need their own evidence.
