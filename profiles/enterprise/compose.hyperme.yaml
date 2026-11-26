@@ -1,0 +1,12 @@
+services:
+  hyperme-web:
+    image: ${HYPERME_WEB_IMAGE:-acrfybercg47.azurecr.io/hypermesh/web:test}
+    pull_policy: always
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${HYPERME_WEB_PORT:-8080}:8080"
+    healthcheck:
+      test: [CMD, node, -e, "fetch('http://127.0.0.1:8080/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 3

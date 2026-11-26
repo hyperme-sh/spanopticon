@@ -8,6 +8,8 @@ import tarfile
 from tempfile import TemporaryDirectory
 import unittest
 
+import yaml
+
 from deployment.fleet_inventory import PORTAL_IMAGE, PORTAL_RUNTIME_SETTINGS, generate
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -80,3 +82,33 @@ class FleetInventoryTest(unittest.TestCase):
             )
             self.assertIn(f'"image":"{PORTAL_IMAGE}:test"', helm)
             self.assertIn('"spanopticon.sh/helm-revision":"1"', helm)
+
+    @unittest.skipUnless(os.environ.get("CHECK_ENTERPRISE_RENDER") == "1", "Native render check runs in CI")
+    def test_named_configs_render_the_same_selected_services(self):
+        enterprise = ROOT / "profiles/enterprise"
+        for name in ("s3rch-web", "portal", "payment", "verification"):
+            (self.root / f"{name}.env").touch()
+        env = {**os.environ, "SPANOPTICON_CONFIG_DIR": str(self.root), "COMPOSE_PROFILES": ""}
+        cases = (
+            ("s3rch", (), {"s3rch-web"}),
+            ("hyperme", (), {"hyperme-web"}),
+            ("spanopticon", ("portal",), {"portal"}),
+            ("spanopticon", ("portal", "payment", "verification"), {"portal", "payment", "verification"}),
+        )
+        for name, optional, expected in cases:
+            with self.subTest(name=name, optional=optional):
+                compose_args = [arg for service in optional for arg in ("--profile", service)]
+                helm_args = [arg for service in optional for arg in ("--set", f"services.{service}.enabled=true")]
+                compose = subprocess.check_output(
+                    ["docker", "compose", "-f", str(enterprise / f"compose.{name}.yaml"),
+                     *compose_args, "config", "--format", "json"], env=env,
+                )
+                helm = subprocess.check_output(
+                    ["helm", "template", "replica", str(enterprise / "helm"),
+                     "-f", str(enterprise / f"helm/values.{name}.yaml"), *helm_args],
+                )
+                compose_images = {service: spec["image"] for service, spec in json.loads(compose)["services"].items()}
+                containers = (item["spec"]["template"]["spec"]["containers"][0]
+                              for item in yaml.safe_load_all(helm) if item and item["kind"] == "Deployment")
+                self.assertEqual(set(compose_images), expected)
+                self.assertEqual({item["name"]: item["image"] for item in containers}, compose_images)

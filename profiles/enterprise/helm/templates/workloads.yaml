@@ -1,0 +1,78 @@
+{{- range $name, $service := .Values.services }}
+{{- if $service.enabled }}
+{{- $fullname := printf "%s-%s" $.Release.Name $name | trunc 63 | trimSuffix "-" }}
+{{- $labels := dict "app.kubernetes.io/instance" $.Release.Name "app.kubernetes.io/name" $name }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $fullname }}
+  labels: {{ $labels | toJson }}
+spec:
+  replicas: 1
+  {{- if $service.data }}
+  strategy:
+    type: Recreate
+  {{- end }}
+  selector:
+    matchLabels: {{ $labels | toJson }}
+  template:
+    metadata:
+      labels: {{ $labels | toJson }}
+      annotations:
+        spanopticon.sh/helm-revision: {{ $.Release.Revision | quote }}
+    spec:
+      {{- with $.Values.imagePullSecrets }}
+      imagePullSecrets: {{ . | toJson }}
+      {{- end }}
+      {{- with $service.data }}
+      securityContext:
+        fsGroup: {{ .fsGroup }}
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: {{ required "An existing data claim is required" .existingClaim | quote }}
+      {{- end }}
+      containers:
+        - name: {{ $name }}
+          image: {{ required (printf "An image tag is required for %s" $name) $service.image | quote }}
+          imagePullPolicy: Always
+          {{- if or $service.configMap $service.secret }}
+          envFrom:
+            {{- with $service.configMap }}
+            - configMapRef:
+                name: {{ . | quote }}
+            {{- end }}
+            {{- with $service.secret }}
+            - secretRef:
+                name: {{ . | quote }}
+            {{- end }}
+          {{- end }}
+          {{- with $service.data }}
+          volumeMounts:
+            - name: data
+              mountPath: {{ .mountPath | quote }}
+          {{- end }}
+          ports:
+            - name: http
+              containerPort: {{ $service.port }}
+          {{- with $service.healthPath }}
+          readinessProbe:
+            httpGet:
+              path: {{ . | quote }}
+              port: http
+          {{- end }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $fullname }}
+  labels: {{ $labels | toJson }}
+spec:
+  selector: {{ $labels | toJson }}
+  ports:
+    - name: http
+      port: {{ $service.port }}
+      targetPort: http
+{{- end }}
+{{- end }}
