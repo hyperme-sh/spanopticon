@@ -1,5 +1,6 @@
 import copy
 import gzip
+import hashlib
 import io
 import tarfile
 import json
@@ -84,10 +85,10 @@ class RuntimeTests(unittest.TestCase):
             with self.subTest(mutate=mutate),self.assertRaises(ValueError):r.helm_check(self.render(items),self.lock,ASSURANCE,'test-plane')
 
     def test_post_renderer_rejects_changed_install_or_upgrade(self):
-        expected=self.root/'expected';raw=self.render()
-        expected.write_bytes(r.canonical(r.kube_documents(raw)))
+        raw=self.render()
+        expected=hashlib.sha256(r.canonical(r.kube_documents(raw))).hexdigest()
         script=Path(__file__).resolve().parents[1]/'scripts/helm_bundle_gate.py'
-        command=[sys.executable,str(script),str(expected),self.lock['candidate']]
+        command=[sys.executable,str(script),expected,self.lock['candidate']]
         ok=subprocess.run(command,input=raw,capture_output=True)
         self.assertEqual(ok.returncode,0,ok.stderr)
         deployment=next(i for i in r.kube_documents(ok.stdout) if i['kind']=='Deployment')

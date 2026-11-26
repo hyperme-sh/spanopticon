@@ -237,10 +237,10 @@ def deploy(layout,engine,name,assurance,output,*,apply=False,context=None,timeou
         b.require(context and not context.startswith('-'),'An explicit Kubernetes context is required')
         rendered=command(['helm','template',name,str(chart),'--namespace',name,'--kube-context',context],env=env)
         items=helm_check(rendered,lock,assurance,name)
-        expected=destination/'helm.expected.json';expected.write_bytes(canonical(items))
+        expected=hashlib.sha256(canonical(items)).hexdigest()
         gate=destination/'helm-post-renderer'
         script=Path(__file__).resolve().parents[1]/'scripts/helm_bundle_gate.py'
-        gate.write_text('#!/bin/sh\nexec '+shlex.quote(sys.executable)+' '+shlex.quote(str(script))+' '+shlex.quote(str(expected))+' '+shlex.quote(lock['candidate'])+'\n')
+        gate.write_text('#!/bin/sh\nexec '+shlex.quote(sys.executable)+' '+shlex.quote(str(script))+' '+shlex.quote(expected)+' '+shlex.quote(lock['candidate'])+'\n')
         gate.chmod(0o700)
         rendered=bind_helm_bundle_tag(items,lock['candidate'])
         if apply:
