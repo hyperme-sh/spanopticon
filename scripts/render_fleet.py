@@ -11,7 +11,7 @@ from deployment.fleet_inventory import generate
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--inventory", default=Path("fleet/services.json"), type=Path)
+    parser.add_argument("--inventory", default=Path("deployment/enterprise-services.json"), type=Path)
     parser.add_argument("--chart-version", required=True)
     parser.add_argument("--output", required=True, type=Path)
     args = parser.parse_args()

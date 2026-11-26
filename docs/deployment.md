@@ -93,7 +93,7 @@ nightly adapter (infra #922). PRs run unit/contract and Helm rendering checks on
 
 ## Enterprise Portal configuration
 
-The enterprise generator reads `fleet/services.json`. Its Portal entry selects
+The enterprise generator reads `deployment/enterprise-services.json`. Its Portal entry selects
 the owner repository and the registry tag to deploy. Adjust `channel` to use
 another authorized tag on that repository. The included inventory follows
 `ghcr.io/hyperme-sh/controlplane-portal/runtime:test`.

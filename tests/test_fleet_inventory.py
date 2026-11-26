@@ -16,7 +16,7 @@ class FleetInventoryTest(unittest.TestCase):
         scratch = TemporaryDirectory()
         self.addCleanup(scratch.cleanup)
         self.root = Path(scratch.name)
-        self.inventory = json.loads((ROOT / "fleet/services.json").read_text())
+        self.inventory = json.loads((ROOT / "deployment/enterprise-services.json").read_text())
 
     def test_both_engines_preserve_the_channel_and_external_secret_refs(self):
         self.inventory["services"]["portal"]["channel"] = "1.4"
