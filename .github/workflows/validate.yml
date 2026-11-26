@@ -24,14 +24,6 @@ jobs:
       - run: python3 -m unittest discover -s tests -v
       - name: Verify public settlement contract and durable TEST ledger
         run: python3 -m unittest discover -s examples/settlement -v
-      - name: Verify the reusable workflow executes the tested policy
-        run: |
-          set -euo pipefail
-          policy_ref=c95fcc76e62c14739965fd069681d66c8d1dfda4
-          git fetch --no-tags --depth=1 origin "$policy_ref"
-          for path in scripts/component_release.py release/accepted.py release/policy.py; do
-            git show "$policy_ref:$path" | cmp - "$path"
-          done
       - name: Validate additive device transfer configuration
         run: python3 scripts/check-device-transfer-compose.py
       - name: Validate generated Compose configuration

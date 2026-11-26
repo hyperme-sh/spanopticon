@@ -1,0 +1,47 @@
+name: Initial OCI release admission
+on:
+  workflow_call:
+    inputs:
+      release-line:
+        type: string
+        required: true
+      requested-version:
+        type: string
+        required: true
+permissions:
+  actions: read
+  contents: read
+jobs:
+  initial:
+    name: Verify the first Gateway OCI candidate
+    runs-on: ${{ github.event.repository.private && fromJSON('["self-hosted", "linux", "x64", "debrunner"]') || 'ubuntu-24.04' }}
+    timeout-minutes: 5
+    steps:
+      - name: Require the owner release event
+        run: |
+          [[ "$GITHUB_REPOSITORY" == hyperme-sh/gateway ]]
+          case "$GITHUB_EVENT_NAME:$GITHUB_REF" in
+            workflow_dispatch:refs/heads/main|push:refs/tags/v*) ;;
+            *) echo 'Expected Gateway main dispatch or a stable tag push' >&2; exit 1 ;;
+          esac
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.sha }}
+          path: candidate
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: hyperme-sh/spanopticon
+          ref: ${{ job.workflow_sha }}
+          path: policy
+          persist-credentials: false
+      - name: Verify immutable image, source and first-release history
+        env:
+          RELEASE_LINE: ${{ inputs.release-line }}
+          REQUESTED_VERSION: ${{ inputs.requested-version }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 policy/scripts/initial_oci_release.py --repository-root candidate \
+            --repository "$GITHUB_REPOSITORY" --line "$RELEASE_LINE" \
+            --requested-version "$REQUESTED_VERSION" --revision "$GITHUB_SHA" --ref "$GITHUB_REF"
