@@ -69,8 +69,7 @@ def admit(current, baseline, repository, line, requested_version=None):
     return component['version']
 
 
-def admit_initial(current, repository, line, requested_version=None, *, fetch=None):
-    """Validate a first declaration; publisher still binds tested bytes and serializes."""
+def initial_component(current, repository, line, requested_version=None):
     require(REPOSITORY.fullmatch(repository), 'Invalid repository identity')
     config, versions = configuration(current, repository, line)
     require(not (Path(current) / 'releases/accepted').exists(),
@@ -79,10 +78,13 @@ def admit_initial(current, repository, line, requested_version=None, *, fetch=No
     require(bundle['line'] == line, 'Candidate is outside the synchronized release line')
     require(set(bundle['components']) == {config['component']}, 'Owner candidate must contain exactly its component')
     component = bundle['components'][config['component']]
-    require(component['artifact']['kind'] == 'package', 'Initial admission currently supports package distributions only')
     require(all(v == component['version'] for v in versions.values()), 'Candidate version differs from an owning package version')
     if requested_version:
         require(component['version'] == requested_version.removeprefix('v'), 'Requested release/tag version differs from candidate')
+    return component
+
+
+def require_no_stable_releases(repository, fetch=None):
     fetch = fetch or (lambda path: github_json(path, document_type=list))
     for page in range(1, 101):
         releases = fetch(f'repos/{repository}/releases?per_page=100&page={page}')
@@ -91,8 +93,16 @@ def admit_initial(current, repository, line, requested_version=None, *, fetch=No
             require(isinstance(release, dict) and release.get('prerelease') is True,
                     'Stable release exists or release classification is unknown; an accepted baseline is required')
         if len(releases) < 100:
-            return component['version']
+            return
     raise PolicyError('Release inventory exceeds initial-admission limit')
+
+
+def admit_initial(current, repository, line, requested_version=None, *, fetch=None):
+    """Validate the first package declaration before publication."""
+    component = initial_component(current, repository, line, requested_version)
+    require(component['artifact']['kind'] == 'package', 'Initial package admission requires a package distribution')
+    require_no_stable_releases(repository, fetch)
+    return component['version']
 
 
 def main():

@@ -101,6 +101,25 @@ before claiming pipeline enforcement. A manual image-only template is not a coor
 release and must not be used to bypass the production promotion gate.
 
 
+## First Gateway container release
+
+Gateway opts into `initial-oci-release.yml` with a full Spanopticon commit SHA.
+The workflow uses read-only Actions and contents access. Other components
+continue to use the package admission workflow.
+
+The Gateway candidate declares `artifact.kind` as `container` and uses its
+qualified GHCR runtime URI with an immutable digest. Its `contract.json` must
+match the contract from the build revision. Set `source_revision`, `run_id` and
+`run_attempt` in `releases/candidate/oci-source.json` to identify the successful
+Gateway main package run that qualified and published that digest. The release
+checkout must descend from the build revision and differ only in the allowed
+release files. Existing stable releases or earlier stable tags require an
+accepted baseline.
+
+Admission returns the qualified image URI and build revision for the separately
+authorized owner publisher. The publisher can call admission on the exact
+stable tag before copying the manifest.
+
 ## Render a validated bundle
 
 ```sh
