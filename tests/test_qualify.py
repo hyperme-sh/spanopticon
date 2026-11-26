@@ -1,3 +1,4 @@
+from copy import deepcopy
 import json
 import os
 from pathlib import Path
@@ -6,7 +7,8 @@ import unittest
 from unittest.mock import patch
 import yaml
 from deployment import bundle as b
-from deployment.qualify import inputs,assemble_input,qualify
+from deployment.generate import chart_bytes
+from deployment.qualify import PORTAL_IMAGE, inputs, assemble_input, qualify
 from deployment.publish import admitted,QUALIFIER
 from runtime_fixture import runtime_fixture,ASSURANCE
 
@@ -27,8 +29,28 @@ class QualifyTests(unittest.TestCase):
         self.output=self.root/'out';self.calls=[];self.applies=[]
         for item in self.items:item['metadata']['namespace']='fleet-validation'
         self.render=patch('deployment.qualify.command',return_value=json.dumps({'kind':'List','items':self.items}).encode())
-        self.render.start();self.addCleanup(self.render.stop)
-    def execute(self,args):self.calls.append(args)
+        self.helm_template=self.render.start();self.addCleanup(self.render.stop)
+    def execute(self,args):
+        self.calls.append(args)
+        if 'exec' in args:
+            return self.portal_html
+
+    def add_portal_component(self, repo=PORTAL_IMAGE):
+        image=repo+'@sha256:'+'e'*64
+        portal={'image':image,'version':'0.1.0','source_revision':'1'*40}
+        self.declaration['components']['portal']=portal
+        self.compose['services']['portal']={'image':image,'healthcheck':{'test':['CMD','node','--version']}}
+        item=deepcopy(next(item for item in self.items if item['kind']=='Deployment'))
+        item['metadata']['name']='portal'
+        container=item['spec']['template']['spec']['containers'][0]
+        container.update(name='portal', image=image, env=[])
+        self.items.append(item)
+        self.helm_template.return_value=json.dumps({'kind':'List','items':self.items}).encode()
+        (self.source/'test.json').write_text(json.dumps(self.declaration))
+        (self.source/'compose.json').write_text(json.dumps(self.compose))
+        (self.source/'chart.tgz').write_bytes(chart_bytes('0.24.0-test.7',self.items))
+        self.portal_html=('<footer><p>Version <!-- -->0.1.0 &middot; Build 111111111111</p>'
+                          '<p>Spanopticon bundle <!-- -->0.24.0-test.7</p></footer>').encode()
     def apply(self,layout,engine,name,assurance,output,**kwargs):
         self.applies.append((engine,name,kwargs))
         output.mkdir()
@@ -52,6 +74,29 @@ class QualifyTests(unittest.TestCase):
         self.assertNotIn('SPANOPTICON_SECRET_VERIFICATION_TEST_CLIENT_FILE',os.environ)
         for path in self.output.rglob('*'):
             if path.is_file():self.assertNotIn(b'synthetic-secret',path.read_bytes())
+    def test_portal_footer_checked_in_both_engines_and_after_helm_upgrade(self):
+        self.add_portal_component()
+        self.run_qualification()
+        probes=[args for args in self.calls if 'exec' in args]
+        self.assertEqual([args[0] for args in probes],['docker','kubectl','kubectl'])
+        self.assertIn('portal',probes[0])
+        self.assertTrue(all('deployment/portal' in args for args in probes[1:]))
+
+    def test_incorrect_portal_bundle_tag_prevents_publication(self):
+        self.add_portal_component()
+        self.portal_html=self.portal_html.replace(b'0.24.0-test.7', b'0.24.0-test.6')
+        with self.assertRaisesRegex(ValueError,'exact bundle tag'):
+            self.run_qualification()
+        self.assertFalse((self.output/'qualification.json').exists())
+        self.assertEqual([e for e,_,_ in self.applies],['compose'])
+        self.assertTrue(any(args[-1]=='down' for args in self.calls))
+
+    def test_portal_image_must_use_the_owner_repository(self):
+        self.add_portal_component('ghcr.io/example/other')
+        with self.assertRaisesRegex(ValueError,'Unexpected Portal owner image repository'):
+            self.run_qualification()
+        self.assertFalse(self.calls)
+
     def test_failure_never_emits_success_and_cleans_both_engines(self):
         normal=self.apply
         def fail(*args,**kwargs):
