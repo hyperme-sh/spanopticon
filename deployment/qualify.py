@@ -1,5 +1,6 @@
 """Qualify reviewed fleet assets through both deployment consumers before publication."""
 import json
+from html.parser import HTMLParser
 import os
 from pathlib import Path
 import subprocess
@@ -12,6 +13,58 @@ from deployment.runtime import deploy, selection, assets, compose_check, helm_ch
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'scripts'))
 from assemble_test_bundle import assemble
 from assurance import settings
+
+PORTAL_IMAGE = 'ghcr.io/hyperme-sh/controlplane-portal/runtime'
+PORTAL_FOOTER = (
+    'fetch("http://127.0.0.1:8080/signed-out",'
+    '{redirect:"error",signal:AbortSignal.timeout(8000)})'
+    '.then(response=>{if(!response.ok)throw Error("Portal did not serve signed-out HTML");'
+    'return response.text()}).then(html=>process.stdout.write(html))'
+    '.catch(()=>{process.exitCode=1})'
+)
+
+
+class FooterParagraphs(HTMLParser):
+    def __init__(self):
+        super().__init__()
+        self.footers = []
+        self.footer = None
+        self.paragraph = None
+
+    def handle_starttag(self, tag, attrs):
+        if tag == 'footer':
+            self.footer = []
+        elif tag == 'p' and self.footer is not None:
+            self.paragraph = []
+
+    def handle_data(self, data):
+        if self.paragraph is not None:
+            self.paragraph.append(data)
+
+    def handle_endtag(self, tag):
+        if tag == 'p' and self.paragraph is not None:
+            self.footer.append(' '.join(''.join(self.paragraph).split()))
+            self.paragraph = None
+        elif tag == 'footer' and self.footer is not None:
+            self.footers.append(self.footer)
+            self.footer = self.paragraph = None
+
+
+def check_portal_footer(html, candidate, component):
+    parser = FooterParagraphs()
+    parser.feed(html.decode('utf-8'))
+    parser.close()
+    release = f"Version {component['version']} · Build {component['source_revision'][:12]}"
+    bundle = f'Spanopticon bundle {candidate}'
+    b.require(any(release in footer
+                  and [label for label in footer if label.startswith('Spanopticon bundle ')] == [bundle]
+                  for footer in parser.footers),
+              'Portal did not render its qualified release and exact bundle tag in the same footer')
+
+
+def probe_portal(execute, command_prefix, candidate, component):
+    if component is not None:
+        check_portal_footer(execute([*command_prefix, 'node', '-e', PORTAL_FOOTER]), candidate, component)
 
 
 def read(path):
@@ -43,6 +96,9 @@ def assemble_input(root,output,env):
              'bundle_reference':reference,'candidate':metadata['candidate']}
     (Path(output)/'selection.json').write_text(json.dumps(receipt)+'\n')
     layout,_,lock=selection(output)
+    portal=lock['components'].get('portal')
+    if portal is not None:
+        b.require(portal['image'].split('@',1)[0] == PORTAL_IMAGE, 'Unexpected Portal owner image repository')
     payload=assets(layout,lock)
     compose_check(b.document(payload['compose']),lock,declaration['assurance'])
     # Rendering is validated without applying or creating credentials in PR runs.
@@ -53,7 +109,7 @@ def assemble_input(root,output,env):
 
 
 def native(args):
-    command(args,timeout=240)
+    return command(args,timeout=240)
 
 
 def qualify(root,output,env=None,*,docker_context='default',kube_context=None,apply=deploy,execute=native):
@@ -68,6 +124,7 @@ def qualify(root,output,env=None,*,docker_context='default',kube_context=None,ap
     b.require(docker_context=='default','Qualification uses the disposable job Docker daemon')
     output=Path(output);output.mkdir(mode=0o700)
     declaration,reference=assemble_input(root,output/'oci',env)
+    portal=declaration['components'].get('portal')
     assurance=declaration['assurance'];_,secret_names=settings(assurance)
     try:credentials=b.document(env.get('FLEET_TEST_CREDENTIALS','{}'))
     except (ValueError,TypeError):raise ValueError('Invalid fleet qualification credentials') from None
@@ -77,6 +134,9 @@ def qualify(root,output,env=None,*,docker_context='default',kube_context=None,ap
     receipts={};created=False;compose_attempted=False;saved={}
     with tempfile.TemporaryDirectory(prefix='fleet-qualification-') as directory:
         scratch=Path(directory)
+        compose_command=['docker','--context',docker_context,'compose','--env-file',os.devnull,'-p',name,
+                         '-f',str(scratch/'compose/compose.resolved.json')]
+        helm_portal=['kubectl','--context',kube_context,'-n',name,'exec','deployment/portal','--']
         try:
             execute(['kubectl','--context',kube_context,'create','namespace',name]);created=True
             for secret,value in credentials.items():
@@ -86,14 +146,17 @@ def qualify(root,output,env=None,*,docker_context='default',kube_context=None,ap
                 execute(['kubectl','--context',kube_context,'-n',name,'create','secret','generic',secret,'--from-file=token='+str(path)])
             compose_attempted=True
             receipts['compose']=apply(output/'oci','compose',name,assurance,scratch/'compose',apply=True,context=docker_context)
+            candidate=receipts['compose']['candidate']
+            probe_portal(execute,[*compose_command,'exec','-T','portal'],candidate,portal)
             receipts['helm']=apply(output/'oci','helm',name,assurance,scratch/'helm',apply=True,context=kube_context)
             # Exercise an upgrade with the same immutable assets as well as first install.
+            probe_portal(execute,helm_portal,candidate,portal)
             apply(output/'oci','helm',name,assurance,scratch/'upgrade',apply=True,context=kube_context)
+            probe_portal(execute,helm_portal,candidate,portal)
         finally:
             try:
                 if compose_attempted and (scratch/'compose/compose.resolved.json').exists():
-                    execute(['docker','--context',docker_context,'compose','--env-file',os.devnull,'-p',name,
-                             '-f',str(scratch/'compose/compose.resolved.json'),'down'])
+                    execute([*compose_command,'down'])
             finally:
                 try:
                     if created:execute(['kubectl','--context',kube_context,'delete','namespace',name,'--wait=true','--timeout=90s'])

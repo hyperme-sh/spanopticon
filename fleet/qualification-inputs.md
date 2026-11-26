@@ -21,6 +21,13 @@ only to a temporary directory and the task-owned Kubernetes namespace, never the
 uploaded bundle. Public images must be pullable from Docker and kind; private
 image-pull credential integration remains separate work.
 
+A `portal` component uses the Portal owner's qualified image from
+`ghcr.io/hyperme-sh/controlplane-portal/runtime`. The main qualification workflow
+reads the running Portal's signed-out footer in both engines and after Helm
+upgrade. The footer must show the qualified image version and build and the exact
+candidate tag resolved for that deployment. Configure the Portal workload to
+serve its signed-out page on port 8080 in the disposable qualification job.
+
 Before adding this inventory, record owner source/build provenance and dependency
 qualification evidence for every image. This workflow checks immutable byte and
 runtime receipt bindings; it does not independently attest image builds. Real
