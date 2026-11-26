@@ -120,6 +120,13 @@ Admission returns the qualified image URI and build revision for the separately
 authorized owner publisher. The publisher can call admission on the exact
 stable tag before copying the manifest.
 
+Gateway's OCI successor workflow uses the immutable published baseline and the
+existing build qualification before comparing both runtime images. It executes
+their OpenAPI exports without networking or deployment credentials. The next
+minor must preserve the published OpenAPI document apart from its version. The
+full byte contract still identifies the exact tested runtime. Other components
+continue to use the generic package compatibility policy.
+
 ## Render a validated bundle
 
 ```sh

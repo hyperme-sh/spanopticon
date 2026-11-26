@@ -69,11 +69,9 @@ def admit(current, baseline, repository, line, requested_version=None):
     return component['version']
 
 
-def initial_component(current, repository, line, requested_version=None):
+def candidate_component(current, repository, line, requested_version=None):
     require(REPOSITORY.fullmatch(repository), 'Invalid repository identity')
     config, versions = configuration(current, repository, line)
-    require(not (Path(current) / 'releases/accepted').exists(),
-            'Initial admission cannot replace an accepted record')
     bundle, _ = load_bundle(contract_path(Path(current).resolve(), 'releases/candidate/release.json'))
     require(bundle['line'] == line, 'Candidate is outside the synchronized release line')
     require(set(bundle['components']) == {config['component']}, 'Owner candidate must contain exactly its component')
@@ -82,6 +80,12 @@ def initial_component(current, repository, line, requested_version=None):
     if requested_version:
         require(component['version'] == requested_version.removeprefix('v'), 'Requested release/tag version differs from candidate')
     return component
+
+
+def initial_component(current, repository, line, requested_version=None):
+    require(not (Path(current) / 'releases/accepted').exists(),
+            'Initial admission cannot replace an accepted record')
+    return candidate_component(current, repository, line, requested_version)
 
 
 def require_no_stable_releases(repository, fetch=None):
