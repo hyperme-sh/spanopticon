@@ -2,6 +2,7 @@
 import json
 from html.parser import HTMLParser
 import os
+import secrets as random_secrets
 from pathlib import Path
 import subprocess
 import sys
@@ -9,12 +10,10 @@ import tempfile
 import uuid
 from deployment import bundle as b
 from deployment.publish import REPOSITORY, QUALIFIER, admitted
-from deployment.runtime import deploy, selection, assets, compose_check, helm_check, command
+from deployment.runtime import deploy, selection, assets, compose_check, helm_check, command, assurance_settings
+from deployment.fleet_inventory import PORTAL_IMAGE, PORTAL_AUTH_NAME, PORTAL_SETTINGS_NAME, FLEET_PULL_SECRET
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'scripts'))
 from assemble_test_bundle import assemble
-from assurance import settings
-
-PORTAL_IMAGE = 'ghcr.io/hyperme-sh/controlplane-portal/runtime'
 PORTAL_FOOTER = (
     'fetch("http://127.0.0.1:8080/signed-out",'
     '{redirect:"error",signal:AbortSignal.timeout(8000)})'
@@ -79,7 +78,7 @@ def inputs(root):
     declaration=read(root/'test.json')
     b.keys(declaration,('schema','components','assurance'),'fleet inputs')
     b.require(type(declaration['schema']) is int and declaration['schema']==1,'Unsupported fleet schema')
-    settings(declaration['assurance'])
+    assurance_settings(declaration['components'],declaration['assurance'])
     for name in ('compose.json','chart.tgz'):
         path=root/name
         b.require(path.is_file() and not path.is_symlink(),'Missing regular fleet deployment asset')
@@ -112,10 +111,37 @@ def native(args):
     return command(args,timeout=240)
 
 
+def portal_qualification_inputs(config, scratch):
+    """Prepare credentials scoped to the disposable qualification containers."""
+    b.require(config and Path(config).is_absolute(), "Portal needs a job-local registry config")
+    registry = Path(config) / "config.json"
+    b.require(registry.is_file() and not registry.is_symlink(), "Portal registry auth is unavailable")
+    auth = read(registry).get("auths")
+    b.require(isinstance(auth, dict) and set(auth) == {"ghcr.io"}
+              and isinstance(auth["ghcr.io"].get("auth"), str) and auth["ghcr.io"]["auth"],
+              "Use a job-local config with a single GHCR pull identity")
+    secret = scratch / PORTAL_AUTH_NAME
+    secret.write_text(random_secrets.token_urlsafe(32))
+    secret.chmod(0o444)
+    tenant = "00000000-0000-0000-0000-000000000001"
+    settings = {
+        "AUTH_URL": "https://portal.example.invalid",
+        "AUTH_KEYCLOAK_ID": "isolated-portal",
+        "AUTH_KEYCLOAK_ISSUER": "https://auth.example.invalid/realms/portal",
+        "NEXT_PUBLIC_CPEDGE_URL": "https://edge.example.invalid",
+        "NEXT_PUBLIC_LOGIN_TENANT_ID": tenant,
+        "NEXT_PUBLIC_AUTH_SCOPES_REQUIRED": "true",
+        "NEXT_PUBLIC_TENANT_PICKER": "false",
+        "PORTAL_TENANT_ROUTES": "{}",
+        "PORTAL_TENANT_VERSIONS": json.dumps({tenant: "1.2.3"}),
+    }
+    return registry, secret, settings
+
+
 def qualify(root,output,env=None,*,docker_context='default',kube_context=None,apply=deploy,execute=native):
     env=dict(os.environ) if env is None else env
     b.require(env.get('GITHUB_REPOSITORY')=='hyperme-sh/spanopticon'
-              and env.get('GITHUB_EVENT_NAME')=='push' and env.get('GITHUB_REF')=='refs/heads/main'
+              and env.get('GITHUB_EVENT_NAME') in ('push', 'schedule') and env.get('GITHUB_REF')=='refs/heads/main'
               and env.get('GITHUB_WORKFLOW_REF')==QUALIFIER
               and b.matches(r'[1-9][0-9]*',env.get('GITHUB_RUN_ATTEMPT')),
               'Only the main fleet qualification workflow may apply')
@@ -125,8 +151,8 @@ def qualify(root,output,env=None,*,docker_context='default',kube_context=None,ap
     output=Path(output);output.mkdir(mode=0o700)
     declaration,reference=assemble_input(root,output/'oci',env)
     portal=declaration['components'].get('portal')
-    assurance=declaration['assurance'];_,secret_names=settings(assurance)
-    try:credentials=b.document(env.get('FLEET_TEST_CREDENTIALS','{}'))
+    assurance=declaration['assurance'];_,secret_names=assurance_settings(declaration['components'],assurance)
+    try:credentials=b.document(env.get('FLEET_TEST_CREDENTIALS','{}')) if assurance is not None else {}
     except (ValueError,TypeError):raise ValueError('Invalid fleet qualification credentials') from None
     b.require(set(credentials)==set(secret_names) and all(isinstance(v,str) and 0<len(v)<=65536 for v in credentials.values()),
               'Supply exactly the selected assurance credentials')
@@ -137,8 +163,20 @@ def qualify(root,output,env=None,*,docker_context='default',kube_context=None,ap
         compose_command=['docker','--context',docker_context,'compose','--env-file',os.devnull,'-p',name,
                          '-f',str(scratch/'compose/compose.resolved.json')]
         helm_portal=['kubectl','--context',kube_context,'-n',name,'exec','deployment/portal','--']
+        portal_inputs=portal_qualification_inputs(env.get('DOCKER_CONFIG'),scratch) if assurance is None else None
         try:
             execute(['kubectl','--context',kube_context,'create','namespace',name]);created=True
+            if portal_inputs:
+                registry, auth_secret, portal_settings = portal_inputs
+                kube = ['kubectl','--context',kube_context,'-n',name,'create']
+                execute([*kube,'secret','generic',FLEET_PULL_SECRET,
+                         '--type=kubernetes.io/dockerconfigjson','--from-file=.dockerconfigjson='+str(registry)])
+                execute([*kube,'secret','generic',PORTAL_AUTH_NAME,'--from-file=token='+str(auth_secret)])
+                execute([*kube,'configmap',PORTAL_SETTINGS_NAME,
+                         *['--from-literal='+key+'='+value for key,value in portal_settings.items()]])
+                for key,value in {**portal_settings, 'PORTAL_AUTH_SECRET_FILE': str(auth_secret)}.items():
+                    saved[key]=os.environ.get(key)
+                    os.environ[key]=value
             for secret,value in credentials.items():
                 path=scratch/secret;path.write_text(value);path.chmod(0o444)
                 variable='SPANOPTICON_SECRET_'+secret.upper().replace('-','_')+'_FILE'

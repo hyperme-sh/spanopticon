@@ -17,7 +17,7 @@ def admitted(root, env):
     """The caller's successful qualification job is the trust boundary, not JSON alone."""
     b.require(env.get('GITHUB_REPOSITORY') == 'hyperme-sh/spanopticon'
               and env.get('GITHUB_REF') == 'refs/heads/main'
-              and env.get('GITHUB_EVENT_NAME') == 'push'
+              and env.get('GITHUB_EVENT_NAME') in ('push', 'schedule')
               and env.get('GITHUB_WORKFLOW_REF') == QUALIFIER,
               'Only the main fleet qualification workflow may publish')
     run, attempt = env.get('GITHUB_RUN_ID', ''), env.get('GITHUB_RUN_ATTEMPT', '')

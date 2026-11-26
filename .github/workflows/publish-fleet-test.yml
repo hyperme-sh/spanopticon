@@ -8,7 +8,7 @@ jobs:
   publish:
     if: >-
       github.repository == 'hyperme-sh/spanopticon' &&
-      github.event_name == 'push' && github.ref == 'refs/heads/main' &&
+      contains(fromJSON('["push", "schedule"]'), github.event_name) && github.ref == 'refs/heads/main' &&
       github.workflow_ref == 'hyperme-sh/spanopticon/.github/workflows/qualify-fleet.yml@refs/heads/main'
     runs-on: ubuntu-24.04
     timeout-minutes: 15

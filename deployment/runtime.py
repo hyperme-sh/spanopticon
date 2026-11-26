@@ -13,6 +13,7 @@ import tempfile
 
 import yaml
 from deployment import bundle as b
+from deployment.fleet_inventory import PORTAL_IMAGE
 
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'scripts'))
 from assurance import settings
@@ -95,11 +96,22 @@ def assets(root,lock):
     return result
 
 
+def assurance_settings(components, config):
+    if config is None:
+        # The Portal-only bundle is an external-service client. Plane and other
+        # service assets still need the regular assurance contract.
+        b.require(set(components) == {"portal"}
+                  and components["portal"]["image"].rsplit("@", 1)[0] == PORTAL_IMAGE,
+                  "Only the owner Portal bundle can use external assurance")
+        return {}, {}
+    return settings(config)
+
+
 def compose_check(document,lock,assurance):
     b.require(isinstance(document,dict) and set(document)<= {'name','services','volumes','networks','secrets'},'Unsupported Compose top-level fields')
     services=document.get('services')
     b.require(isinstance(services,dict) and set(services)==set(lock['components']),'Compose component inventory differs')
-    expected,secrets=settings(assurance); adapters=0
+    expected,secrets=assurance_settings(lock['components'],assurance); adapters=0
     for name,service in services.items():
         b.require(isinstance(service,dict) and service.get('image')==lock['components'][name]['image'],'Compose image differs from bundle')
         b.require(not any(key in service for key in ('build','extends','profiles','develop','provider','pre_start','post_start','pre_stop','env_file')),'Compose build/overrides/hooks are unsupported')
@@ -126,7 +138,7 @@ def compose_check(document,lock,assurance):
                     chosen=os.environ.get(variable)
                     b.require(chosen and Path(definition['file']).resolve()==Path(chosen).resolve(),
                               'Assurance credential file must match the operator-selected path')
-    b.require(adapters>0,'At least one component must enforce the selected assurance contract')
+    b.require(assurance is None or adapters>0,'At least one component must enforce the selected assurance contract')
     return document
 
 
@@ -147,7 +159,7 @@ def kube_documents(raw):
 def helm_check(raw,lock,assurance,namespace):
     items=kube_documents(raw)
     b.require(0<len(items)<=1024,'Invalid Kubernetes object count')
-    expected,secrets=settings(assurance); deployed={};identities=set();adapters=0
+    expected,secrets=assurance_settings(lock['components'],assurance); deployed={};identities=set();adapters=0
     for item in items:
         b.require(isinstance(item,dict) and item.get('kind') in ('Deployment','Service','ConfigMap','PersistentVolumeClaim','NetworkPolicy'),'Unsupported Kubernetes resource; migrations/hooks require separate qualification')
         meta=item.get('metadata',{})
@@ -182,7 +194,8 @@ def helm_check(raw,lock,assurance,namespace):
                 b.require(volume.get('secretName')==secret and volume.get('optional',False) is False
                           and volume.get('items')==[{'key':'token','path':secret}] and matches[0].get('subPath')==secret,'Assurance secret source differs')
         deployed[name]=container['image']
-    b.require(set(deployed)==set(lock['components']) and adapters>0,'Helm component/assurance inventory differs')
+    b.require(set(deployed)==set(lock['components']) and (assurance is None or adapters>0),
+              'Helm component/assurance inventory differs')
     return items
 
 
@@ -200,7 +213,7 @@ def deploy(layout,engine,name,assurance,output,*,apply=False,context=None,timeou
     b.require(type(timeout) is int and 1<=timeout<=900,'Timeout must be 1..900 seconds')
     root,receipt,lock=selection(layout)
     payload=assets(root,lock)
-    settings(assurance)  # Keep existing assurance contract; no provider activation is implied.
+    assurance_settings(lock['components'],assurance)
     destination=Path(output).absolute();destination.mkdir(mode=0o700)
     env=dict(os.environ)
     for key in list(env):

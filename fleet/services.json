@@ -1,0 +1,9 @@
+{
+  "schema": 1,
+  "services": {
+    "portal": {
+      "repository": "ghcr.io/hyperme-sh/controlplane-portal/runtime",
+      "channel": "test"
+    }
+  }
+}

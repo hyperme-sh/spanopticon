@@ -3,13 +3,19 @@ on:
   push:
     branches: [main]
   pull_request:
+  schedule:
+    - cron: '7,37 * * * *'
 permissions:
   contents: read
+concurrency:
+  group: spanopticon-fleet-workflow-${{ github.event.pull_request.number || 'main' }}
+  cancel-in-progress: false
 jobs:
   inventory:
     runs-on: ubuntu-24.04
     outputs:
       available: ${{ steps.inventory.outputs.available }}
+      generated: ${{ steps.inventory.outputs.generated }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
@@ -17,7 +23,13 @@ jobs:
       - id: inventory
         name: Require explicit fleet inputs
         run: |
-          if test -f fleet/test.json; then
+          if test -f fleet/test.json && test -f fleet/services.json; then
+            echo 'Choose one fleet inventory format.' >&2
+            exit 1
+          elif test -f fleet/services.json; then
+            echo 'generated=true' >> "$GITHUB_OUTPUT"
+            echo 'available=true' >> "$GITHUB_OUTPUT"
+          elif test -f fleet/test.json; then
             echo 'available=true' >> "$GITHUB_OUTPUT"
           else
             echo 'available=false' >> "$GITHUB_OUTPUT"
@@ -38,14 +50,24 @@ jobs:
           python3 scripts/install_deployment_test_tools.py --output "$RUNNER_TEMP/fleet-tools"
           echo "$RUNNER_TEMP/fleet-python/bin" >> "$GITHUB_PATH"
           echo "$RUNNER_TEMP/fleet-tools" >> "$GITHUB_PATH"
-      - run: python3 scripts/qualify_fleet.py --validate-only --output "$RUNNER_TEMP/fleet-validation"
+      - name: Check generated fleet contracts
+        if: needs.inventory.outputs.generated == 'true'
+        run: python3 -m unittest discover -s tests -p test_fleet_inventory.py
+      - name: Validate authored fleet
+        if: needs.inventory.outputs.generated != 'true'
+        run: python3 scripts/qualify_fleet.py --validate-only --output "$RUNNER_TEMP/fleet-validation"
   qualify:
     needs: [inventory, validate]
     if: >-
-      github.event_name == 'push' && github.ref == 'refs/heads/main' &&
-      needs.inventory.outputs.available == 'true'
+      (github.event_name == 'push' || (github.event_name == 'schedule' && needs.inventory.outputs.generated == 'true')) &&
+      github.ref == 'refs/heads/main' && needs.inventory.outputs.available == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 20
+    permissions:
+      contents: read
+      packages: read
+    outputs:
+      ready: ${{ steps.resolve.outputs.ready }}
     env:
       KIND_NAME: spanopticon-fleet-${{ github.run_id }}-${{ github.run_attempt }}
     steps:
@@ -61,28 +83,77 @@ jobs:
           echo "$RUNNER_TEMP/fleet-python/bin" >> "$GITHUB_PATH"
           echo "$RUNNER_TEMP/fleet-tools" >> "$GITHUB_PATH"
           echo "KUBECONFIG=$RUNNER_TEMP/fleet-kubeconfig" >> "$GITHUB_ENV"
+      - name: Resolve the qualified owner image
+        id: resolve
+        shell: bash
+        env:
+          GENERATED: ${{ needs.inventory.outputs.generated }}
+          PORTAL_GHCR_PULL_USER: ${{ vars.FLEET_PORTAL_GHCR_PULL_USER }}
+          PORTAL_GHCR_PULL_TOKEN: ${{ secrets.FLEET_PORTAL_GHCR_PULL_TOKEN }}
+          GHCR_USERNAME: ${{ github.actor }}
+          GHCR_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if [[ "$GENERATED" != true ]]; then
+            echo 'ready=true' >> "$GITHUB_OUTPUT"
+            echo 'FLEET_INPUTS=fleet' >> "$GITHUB_ENV"
+            exit 0
+          fi
+          if [[ -z "$PORTAL_GHCR_PULL_USER" || -z "$PORTAL_GHCR_PULL_TOKEN" ]]; then
+            echo 'Fleet qualification needs its scoped Portal GHCR pull identity.' >> "$GITHUB_STEP_SUMMARY"
+            echo 'ready=false' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          export DOCKER_CONFIG
+          DOCKER_CONFIG=$(mktemp -d "$RUNNER_TEMP/portal-fleet-docker.XXXXXXXX")
+          echo "DOCKER_CONFIG=$DOCKER_CONFIG" >> "$GITHUB_ENV"
+          printf '%s\n' '{"auths":{"ghcr.io":{}}}' > "$DOCKER_CONFIG/config.json"
+          chmod 600 "$DOCKER_CONFIG/config.json"
+          printf '%s' "$PORTAL_GHCR_PULL_TOKEN" | docker login ghcr.io --username "$PORTAL_GHCR_PULL_USER" --password-stdin
+          input_dir="$RUNNER_TEMP/portal-fleet-inputs"
+          ready=$(python3 scripts/resolve_fleet_portal.py --inventory fleet/services.json \
+            --output "$input_dir" --scratch "$RUNNER_TEMP")
+          echo "FLEET_INPUTS=$input_dir" >> "$GITHUB_ENV"
+          echo "ready=$ready" >> "$GITHUB_OUTPUT"
       - name: Create disposable cluster
+        if: steps.resolve.outputs.ready == 'true'
         run: kind create cluster --name "$KIND_NAME" --image kindest/node:v1.37.0@sha256:a1ed56cfb0e7b93589bdf97c8cd566405a265939e3620fc4f5de89adff580ae5 --wait 120s
       - name: Qualify exact fleet assets
+        if: steps.resolve.outputs.ready == 'true'
         env:
           FLEET_TEST_CREDENTIALS: ${{ secrets.FLEET_TEST_CREDENTIALS }}
-        run: python3 scripts/qualify_fleet.py --kube-context "kind-$KIND_NAME" --output "$RUNNER_TEMP/fleet-test-bundle"
+        run: python3 scripts/qualify_fleet.py --inputs "$FLEET_INPUTS" --kube-context "kind-$KIND_NAME" --output "$RUNNER_TEMP/fleet-test-bundle"
+      - name: Confirm the Portal owner channel still points to the qualified build
+        if: steps.resolve.outputs.ready == 'true' && needs.inventory.outputs.generated == 'true'
+        run: |
+          set -euo pipefail
+          owner=$(jq -er '.services.portal.repository + ":" + .services.portal.channel' fleet/services.json)
+          expected=$(jq -er '.components.portal.image | split("@")[1]' "$FLEET_INPUTS/test.json")
+          actual=$(docker buildx imagetools inspect "$owner" --format '{{.Manifest.Digest}}')
+          test "$actual" = "$expected"
       # Same-run handoff for publish-fleet-test. GHCR keeps the qualified bytes.
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: steps.resolve.outputs.ready == 'true'
         with:
           name: fleet-test-bundle-${{ github.run_attempt }}
           path: ${{ runner.temp }}/fleet-test-bundle
           if-no-files-found: error
           retention-days: 1
       - name: Remove task-owned cluster
-        if: always()
+        if: always() && steps.resolve.outputs.ready == 'true'
         run: |
           if command -v kind >/dev/null; then
             kind delete cluster --name "$KIND_NAME"
           fi
+      - name: Remove the job-local pull profile
+        if: always() && needs.inventory.outputs.generated == 'true'
+        run: |
+          if [[ "${DOCKER_CONFIG:-}" == "$RUNNER_TEMP"/portal-fleet-docker.* ]]; then
+            rm -rf -- "$DOCKER_CONFIG"
+          fi
   publish:
     needs: qualify
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main' && needs.qualify.outputs.ready == 'true'
     permissions:
       contents: read
       actions: read

@@ -15,13 +15,14 @@ def main():
     parser.add_argument('--engine',required=True,choices=['compose','helm'])
     parser.add_argument('--name',required=True)
     parser.add_argument('--context',required=True,help='Explicit Docker or Kubernetes context')
-    parser.add_argument('--assurance-config',required=True,type=Path)
+    parser.add_argument('--assurance-config',type=Path,help='Required for bundles with assurance services')
     parser.add_argument('--output',required=True,type=Path)
     parser.add_argument('--apply',action='store_true',help='Apply to the explicitly selected test context')
     parser.add_argument('--timeout',type=int,default=180)
     args=parser.parse_args()
     try:
-        result=deploy(args.bundle,args.engine,args.name,load(args.assurance_config),args.output,
+        assurance=load(args.assurance_config) if args.assurance_config else None
+        result=deploy(args.bundle,args.engine,args.name,assurance,args.output,
                       apply=args.apply,context=args.context,timeout=args.timeout)
     except (ValueError,OSError,TypeError,KeyError,RecursionError) as error:
         parser.exit(1,f'Test deployment rejected: {error}\n')

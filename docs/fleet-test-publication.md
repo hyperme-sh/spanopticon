@@ -11,14 +11,56 @@ applies. Stable releases and gold promotion remain separately authorized work.
 
 ## Qualification producer contract
 
-The reusable `.github/workflows/publish-fleet-test.yml` is restricted to a push to
+The reusable `.github/workflows/publish-fleet-test.yml` is restricted to a main push or scheduled reconciliation on
 Spanopticon main from `.github/workflows/qualify-fleet.yml`. The producer now validates reviewed `fleet/` inputs, assembles one OCI bundle,
 exercises the exact Compose and Helm bytes including Helm upgrade, and uploads
 the same-run/attempt artifact before calling the publisher through `needs: qualify`.
-No fleet inventory is configured yet: the workflow reports that state and skips
-qualification/publication. Adding real owner images, their source/dependency
-evidence and compatible service assets remains necessary; fixture images are not
-a substitute. The existing template archive workflow remains separate.
+The generated Portal inventory is `fleet/services.json`. It follows the Portal
+owner's qualified `runtime:test` channel. The fleet workflow reconciles it on
+main updates and on its regular schedule, resolves that owner channel once, and
+reads the package version and source revision from the exact selected image.
+If the published fleet already contains that build, the scheduled check stops.
+Owner image qualification stays in the Portal release workflow.
+
+## Generate and validate Portal assets
+
+Edit `fleet/services.json` to select the supported owner channel. Adding another
+component requires a renderer for its runtime and qualification requirements.
+Retiring this enrollment means removing Portal from the generated lane or
+replacing that lane with a reviewed inventory for the remaining components.
+
+The resolver consumes the owner image and generates the whole input set. The
+offline generator also accepts an already verified owner record with
+`selector`, `image`, `version`, and `source_revision`:
+
+```sh
+python3 scripts/render_fleet.py --qualified /path/to/owner-release.json \
+  --candidate 0.24.0-test.123 --output /new/path/portal-fleet
+```
+
+The output contains `test.json`, `compose.json`, and `chart.tgz`. Use the same
+inputs and candidate to reproduce the bytes. Both formats use the existing
+Portal owner image and require runtime configuration for the service: the
+Portal origin, Keycloak issuer and client, Edge URL, active tenant UUID, tenant
+picker setting and routes, and tenant version map. Compose loads those settings
+as environment variables and reads the session secret from the file named by
+`PORTAL_AUTH_SECRET_FILE` through the mounted `portal-auth` secret. Helm reads
+those settings from the existing `portal-settings` ConfigMap and reads the
+session secret from key `token` in the `portal-auth` Secret. Its image pull uses
+the `fleet-ghcr` registry Secret. Generate or provision real values through the
+owning environment configuration. The assets contain secret names and file
+references.
+
+Qualification uses disposable credentials and project-controlled signed-out
+settings. It prepares a job-local auth secret, a scoped private GHCR pull
+Secret, and configuration for the isolated Helm namespace automatically.
+The workflow reads `FLEET_PORTAL_GHCR_PULL_USER` and
+`FLEET_PORTAL_GHCR_PULL_TOKEN` from the existing repository config and secret
+store. If either is unavailable it reports that the Portal lane is blocked and
+skips publication. Keep the pull identity scoped to the Portal owner package.
+The publisher uses its existing package writer. The portal-only bundle uses
+external TEST services. An inventory containing an assurance service still
+requires the full assurance profile and configured provider credential references.
 
 The producer must use the candidate `0.24.0-test.${GITHUB_RUN_ID}`. GitHub allocates
 that identity before qualification, so the chart/bundle can be tested without
@@ -55,7 +97,7 @@ After a successful qualification job, the producer calls:
 ```yaml
 publish:
   needs: qualify
-  if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+  if: github.ref == 'refs/heads/main' && needs.qualify.outputs.ready == 'true'
   permissions:
     contents: read
     actions: read
