@@ -1,7 +1,9 @@
+import io
 import json
 import os
 from pathlib import Path
 import subprocess
+import sys
 import tarfile
 from tempfile import TemporaryDirectory
 import unittest
@@ -20,19 +22,16 @@ class FleetInventoryTest(unittest.TestCase):
 
     def test_both_engines_preserve_the_channel_and_external_secret_refs(self):
         self.inventory["services"]["portal"]["channel"] = "1.4"
-        first, second = self.root / "first", self.root / "second"
-        generate(self.inventory, "0.1.0", first)
-        generate(self.inventory, "0.1.0", second)
-        for name in ("compose.json", "chart.tgz", "runtime-inputs.json"):
-            self.assertEqual((first / name).read_bytes(), (second / name).read_bytes())
-        compose = json.loads((first / "compose.json").read_bytes())
+        first = generate(self.inventory, "0.1.0")
+        self.assertEqual(first, generate(self.inventory, "0.1.0"))
+        compose = json.loads(first["compose.json"])
         portal = compose["services"]["portal"]
         self.assertEqual(portal["image"], f"{PORTAL_IMAGE}:1.4")
         self.assertEqual(portal["pull_policy"], "always")
         self.assertIn("PORTAL_AUTH_SECRET_FILE", compose["secrets"]["portal-auth"]["file"])
         self.assertNotIn("AUTH_SECRET", portal["environment"])
 
-        with tarfile.open(first / "chart.tgz") as chart:
+        with tarfile.open(fileobj=io.BytesIO(first["chart.tgz"])) as chart:
             resources = json.load(chart.extractfile("spanopticon-plane/resources.json"))
             template = chart.extractfile("spanopticon-plane/templates/resources.yaml").read()
         self.assertIn(b"$.Release.Revision", template)
@@ -44,8 +43,8 @@ class FleetInventoryTest(unittest.TestCase):
         self.assertEqual(container["image"], portal["image"])
         self.assertEqual(container["imagePullPolicy"], "Always")
         env = {entry["name"]: entry for entry in container["env"]}
-        self.assertEqual(set(env) - {"AUTH_TRUST_HOST", "AUTH_SECRET"}, set(PORTAL_RUNTIME_SETTINGS))
-        inputs = json.loads((first / "runtime-inputs.json").read_bytes())
+        self.assertEqual(set(env) - {"AUTH_TRUST_HOST", "AUTH_SECRET", "TMPDIR"}, set(PORTAL_RUNTIME_SETTINGS))
+        inputs = json.loads(first["runtime-inputs.json"])
         self.assertEqual(inputs["settings"]["keys"], list(PORTAL_RUNTIME_SETTINGS))
         self.assertEqual(inputs["secret"]["helm"], env["AUTH_SECRET"]["valueFrom"]["secretKeyRef"])
         self.assertEqual(inputs["secret"]["compose_file_env"], "PORTAL_AUTH_SECRET_FILE")
@@ -57,13 +56,15 @@ class FleetInventoryTest(unittest.TestCase):
         ):
             self.inventory["services"]["portal"] = {"repository": repo, "channel": channel}
             with self.subTest(repo=repo, channel=channel), self.assertRaises(ValueError):
-                generate(self.inventory, "0.1.0", self.root / "output")
-            self.assertFalse((self.root / "output").exists())
+                generate(self.inventory, "0.1.0")
 
     @unittest.skipUnless(os.environ.get("CHECK_ENTERPRISE_RENDER") == "1", "Native render check runs in CI")
     def test_compose_and_helm_render_without_pulling_images(self):
         output = self.root / "out"
-        generate(self.inventory, "0.1.0", output)
+        subprocess.run(
+            [sys.executable, str(ROOT / "scripts/render_fleet.py"), "--chart-version", "0.1.0", "--output", output.name],
+            cwd=self.root, check=True,
+        )
         secret = self.root / "fixture-auth"
         secret.write_text("configuration-only")
         env = {**os.environ, **dict.fromkeys(PORTAL_RUNTIME_SETTINGS, "fixture"),

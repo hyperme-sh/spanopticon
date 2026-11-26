@@ -1,6 +1,5 @@
 """Render enterprise fleet configuration from enrolled service tags."""
 import json
-from pathlib import Path
 
 from deployment import bundle as b
 from deployment.generate import chart_bytes
@@ -48,6 +47,7 @@ def portal_assets(image):
         "pull_policy": "always",
         "environment": {
             "AUTH_TRUST_HOST": "true",
+            "TMPDIR": "/run/portal-tmp",
             **{key: "${" + key + ":?provide Portal runtime configuration}" for key in PORTAL_RUNTIME_SETTINGS},
         },
         "secrets": [PORTAL_AUTH_NAME],
@@ -57,7 +57,7 @@ def portal_assets(image):
             'export AUTH_SECRET; exec node server.js',
         ],
         "read_only": True,
-        "tmpfs": ["/tmp:rw,noexec,nosuid,size=64m,mode=1777"],
+        "tmpfs": ["/run/portal-tmp:rw,noexec,nosuid,size=64m,mode=0700,uid=1000,gid=1000"],
         "cap_drop": ["ALL"],
         "security_opt": ["no-new-privileges:true"],
         "healthcheck": {
@@ -79,7 +79,7 @@ def portal_assets(image):
                     "automountServiceAccountToken": False,
                     "imagePullSecrets": [{"name": FLEET_PULL_SECRET}],
                     "securityContext": {
-                        "runAsNonRoot": True, "runAsUser": 1000, "runAsGroup": 1000,
+                        "runAsNonRoot": True, "runAsUser": 1000, "runAsGroup": 1000, "fsGroup": 1000,
                         "seccompProfile": {"type": "RuntimeDefault"},
                     },
                     "volumes": [{"name": "tmp", "emptyDir": {"sizeLimit": "64Mi"}}],
@@ -90,6 +90,7 @@ def portal_assets(image):
                         "ports": [{"name": "http", "containerPort": 8080}],
                         "env": [
                             {"name": "AUTH_TRUST_HOST", "value": "true"},
+                            {"name": "TMPDIR", "value": "/run/portal-tmp"},
                             {"name": "AUTH_SECRET", "valueFrom": {
                                 "secretKeyRef": {"name": PORTAL_AUTH_NAME, "key": "token"},
                             }},
@@ -102,7 +103,7 @@ def portal_assets(image):
                             "readOnlyRootFilesystem": True,
                             "capabilities": {"drop": ["ALL"]},
                         },
-                        "volumeMounts": [{"name": "tmp", "mountPath": "/tmp"}],
+                        "volumeMounts": [{"name": "tmp", "mountPath": "/run/portal-tmp"}],
                         "resources": {
                             "requests": {"cpu": "100m", "memory": "128Mi"},
                             "limits": {"cpu": "1", "memory": "512Mi"},
@@ -136,7 +137,7 @@ def inspect_inventory(inventory):
     return reference(f'{portal["repository"]}:{portal["channel"]}', PORTAL_IMAGE)
 
 
-def generate(inventory, chart_version, output):
+def generate(inventory, chart_version):
     selector = inspect_inventory(inventory)
     b.require(b.matches(b.VERSION + r"(?:-test\.[1-9][0-9]*)?", chart_version),
               "Expected a chart version")
@@ -149,7 +150,7 @@ def generate(inventory, chart_version, output):
         },
         "helm_image_pull_secret": FLEET_PULL_SECRET,
     }
-    outputs = {
+    return {
         "compose.json": (json.dumps({
             "services": {"portal": compose},
             "secrets": {PORTAL_AUTH_NAME: {"file": "${PORTAL_AUTH_SECRET_FILE:?provide the Portal auth secret file}"}},
@@ -157,7 +158,3 @@ def generate(inventory, chart_version, output):
         "chart.tgz": chart_bytes(chart_version, deployments, template=PORTAL_CHART_TEMPLATE),
         "runtime-inputs.json": (json.dumps(runtime_inputs, indent=2) + "\n").encode(),
     }
-    output = Path(output)
-    output.mkdir(mode=0o700)
-    for name, data in outputs.items():
-        (output / name).write_bytes(data)

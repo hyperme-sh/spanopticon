@@ -99,7 +99,7 @@ another authorized tag on that repository. The included inventory follows
 `ghcr.io/hyperme-sh/controlplane-portal/runtime:test`.
 
 ```sh
-python3 scripts/render_fleet.py --chart-version 0.1.0 --output ./portal-bundle
+python3 scripts/render_fleet.py --chart-version 0.1.0 --output portal-bundle
 ```
 
 The output includes `compose.json`, `chart.tgz`, and `runtime-inputs.json`.
