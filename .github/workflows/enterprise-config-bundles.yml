@@ -1,0 +1,67 @@
+name: Enterprise configuration bundles
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'profiles/enterprise/**'
+      - 'deployment/enterprise_bundle.py'
+      - 'scripts/enterprise_config_bundle.py'
+      - 'tests/test_fleet_inventory.py'
+      - 'tests/test_enterprise_bundle.py'
+      - '.github/workflows/enterprise-config-bundles.yml'
+  pull_request:
+    paths:
+      - 'profiles/enterprise/**'
+      - 'deployment/enterprise_bundle.py'
+      - 'scripts/enterprise_config_bundle.py'
+      - 'tests/test_fleet_inventory.py'
+      - 'tests/test_enterprise_bundle.py'
+      - '.github/workflows/enterprise-config-bundles.yml'
+permissions:
+  contents: read
+jobs:
+  configuration:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - name: Render the named Compose and Helm configurations
+        env:
+          CHECK_ENTERPRISE_RENDER: '1'
+        run: |
+          python3 -m venv "$RUNNER_TEMP/enterprise-validate"
+          "$RUNNER_TEMP/enterprise-validate/bin/pip" install --disable-pip-version-check -r requirements-deployment.txt
+          if ! command -v helm >/dev/null; then
+            python3 scripts/install_deployment_test_tools.py --output "$RUNNER_TEMP/enterprise-tools"
+            export PATH="$RUNNER_TEMP/enterprise-tools:$PATH"
+          fi
+          "$RUNNER_TEMP/enterprise-validate/bin/python" -m unittest discover -s tests -p test_fleet_inventory.py
+  publish:
+    needs: configuration
+    if: github.repository == 'hyperme-sh/spanopticon' && github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    concurrency:
+      group: enterprise-config-test-publication
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: oras-project/setup-oras@a379033aa3ed13ed621cce74930b7ef01ec4f743
+        with:
+          version: 1.3.0
+      - name: Publish and verify the three configuration packages
+        env:
+          GHCR_USERNAME: ${{ github.actor }}
+          GHCR_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          python3 -m venv "$RUNNER_TEMP/enterprise-publish"
+          "$RUNNER_TEMP/enterprise-publish/bin/pip" install --disable-pip-version-check -r requirements-deployment.txt
+          "$RUNNER_TEMP/enterprise-publish/bin/python" scripts/enterprise_config_bundle.py publish
