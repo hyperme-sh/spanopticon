@@ -10,7 +10,7 @@ import subprocess
 
 from component_release import initial_component, require_no_stable_releases
 from release.accepted import SHA, github_json
-from release.policy import PolicyError, contract_path, json_document, require
+from release.policy import PolicyError, contract_path, json_document, require, version
 
 
 OWNER = 'hyperme-sh/gateway'
@@ -37,7 +37,7 @@ def git(root, *arguments):
         raise PolicyError('Unable to verify Gateway release checkout') from None
 
 
-def verify_checkout(root, revision, source, contract_digest, tag, ref):
+def verify_checkout(root, revision, source, contract_digest, tag, ref, previous=None):
     require(git(root, 'rev-parse', 'HEAD').decode().strip() == revision,
             'Release checkout does not match the workflow revision')
     require(ref in {'refs/heads/main', f'refs/tags/{tag}'},
@@ -46,7 +46,9 @@ def verify_checkout(root, revision, source, contract_digest, tag, ref):
         require(git(root, 'rev-parse', f'{ref}^{{commit}}').decode().strip() == revision,
                 'Requested stable tag points to a different revision')
     tags = git(root, 'tag', '--list', 'v*').decode().splitlines()
-    require(not any(STABLE_TAG.fullmatch(name) and f'refs/tags/{name}' != ref for name in tags),
+    stable = {name for name in tags if STABLE_TAG.fullmatch(name)}
+    allowed = {name for name in stable if previous is not None and version(name[1:]) <= version(previous)}
+    require(not stable.difference(allowed, {ref.removeprefix('refs/tags/')} if ref.startswith('refs/tags/') else set()),
             'Stable tag already exists; an accepted baseline is required')
     git(root, 'merge-base', '--is-ancestor', source, revision)
     changed = git(root, 'diff', '--no-ext-diff', '--no-textconv', '--no-renames',
@@ -82,15 +84,11 @@ def verify_build(run_id, attempt, source, digest, fetch):
                 'Gateway package, publisher and exact OCI qualification must all succeed')
 
 
-def admit(root, repository, line, requested, revision, ref, *, fetch=github_json):
-    require(repository == OWNER, 'Initial OCI admission is enabled for the Gateway owner only')
-    require(requested and SHA.fullmatch(revision), 'A version and immutable release checkout revision are required')
-    root = Path(root).resolve()
-    component = initial_component(root, repository, line, requested)
+def verify_candidate_image(root, component, revision, ref, fetch, previous=None):
     artifact = component['artifact']
     digest = artifact['sha256']
     require(artifact['kind'] == 'container' and artifact['uri'] == f'{IMAGE_REPOSITORY}@sha256:{digest}',
-            'First Gateway release requires the immutable owner OCI image')
+            'Gateway release requires the immutable owner OCI image')
     require(component['contract'] == 'contract.json', 'Expected the declared Gateway contract path')
     provenance = json_document(contract_path(root, 'releases/candidate/oci-source.json'))
     require(isinstance(provenance, dict) and set(provenance) == {'source_revision', 'run_id', 'run_attempt'},
@@ -100,10 +98,18 @@ def admit(root, repository, line, requested, revision, ref, *, fetch=github_json
             and type(run_id) is int and run_id > 0 and type(attempt) is int and attempt > 0,
             'Invalid Gateway OCI build reference')
     tag = 'v' + component['version']
-    verify_checkout(root, revision, source, component['contract_sha256'], tag, ref)
-    require_no_stable_releases(repository, lambda path: fetch(path, document_type=list))
+    verify_checkout(root, revision, source, component['contract_sha256'], tag, ref, previous)
     verify_build(run_id, attempt, source, digest, fetch)
     return tag, artifact['uri'], source
+
+
+def admit(root, repository, line, requested, revision, ref, *, fetch=github_json):
+    require(repository == OWNER, 'Initial OCI admission is enabled for the Gateway owner only')
+    require(requested and SHA.fullmatch(revision), 'A version and immutable release checkout revision are required')
+    root = Path(root).resolve()
+    component = initial_component(root, repository, line, requested)
+    require_no_stable_releases(repository, lambda path: fetch(path, document_type=list))
+    return verify_candidate_image(root, component, revision, ref, fetch)
 
 
 def main():

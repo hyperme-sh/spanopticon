@@ -1,0 +1,80 @@
+name: Gateway OCI successor admission
+
+on:
+  workflow_call:
+    inputs:
+      baseline-ref:
+        type: string
+        required: true
+      release-line:
+        type: string
+        required: true
+      requested-version:
+        type: string
+        required: true
+    outputs:
+      image:
+        value: ${{ jobs.admit.outputs.image }}
+      source-revision:
+        value: ${{ jobs.admit.outputs.source-revision }}
+
+permissions:
+  contents: read
+  actions: read
+  packages: read
+
+jobs:
+  admit:
+    name: Verify the Gateway OCI successor
+    runs-on: ${{ github.event.repository.private && fromJSON('["self-hosted", "linux", "x64", "debrunner"]') || 'ubuntu-24.04' }}
+    timeout-minutes: 12
+    outputs:
+      image: ${{ steps.verify.outputs.image }}
+      source-revision: ${{ steps.verify.outputs.source-revision }}
+    steps:
+      - name: Require the exact owner release event and baseline commit
+        env:
+          BASELINE_REVISION: ${{ inputs.baseline-ref }}
+        run: |
+          set -euo pipefail
+          [[ "$GITHUB_REPOSITORY" == hyperme-sh/gateway && "$BASELINE_REVISION" =~ ^[0-9a-f]{40}$ ]]
+          case "$GITHUB_EVENT_NAME:$GITHUB_REF" in
+            workflow_dispatch:refs/heads/main|workflow_dispatch:refs/tags/v*|push:refs/tags/v*) ;;
+            *) echo 'Expected a Gateway main dispatch or stable tag event' >&2; exit 1 ;;
+          esac
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.sha }}
+          path: candidate
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ inputs.baseline-ref }}
+          path: baseline
+          persist-credentials: false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: hyperme-sh/spanopticon
+          ref: ${{ job.workflow_sha }}
+          path: policy
+          persist-credentials: false
+      - id: verify
+        name: Verify release provenance and compare the two OCI runtime contracts
+        env:
+          BASELINE_REVISION: ${{ inputs.baseline-ref }}
+          RELEASE_LINE: ${{ inputs.release-line }}
+          REQUESTED_VERSION: ${{ inputs.requested-version }}
+          POLICY_REVISION: ${{ job.workflow_sha }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          test "$(git -C policy rev-parse HEAD)" = "$POLICY_REVISION"
+          export DOCKER_CONFIG
+          DOCKER_CONFIG=$(mktemp -d "$RUNNER_TEMP/gateway-oci-admission.XXXXXXXX")
+          trap 'rm -rf -- "$DOCKER_CONFIG"' EXIT
+          printf '%s' "$GH_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+          python3 policy/scripts/gateway_oci_successor.py --repository-root candidate \
+            --baseline-root baseline --baseline-revision "$BASELINE_REVISION" \
+            --repository "$GITHUB_REPOSITORY" --line "$RELEASE_LINE" --requested-version "$REQUESTED_VERSION" \
+            --revision "$GITHUB_SHA" --ref "$GITHUB_REF"
