@@ -15,9 +15,9 @@ starts the selected service containers. Configure their upstream endpoints, data
 and any external identity provider for your environment.
 
 - [s3r.ch minimal install](https://github.com/FyberLabs/s3r.ch/blob/master/docs/install-minimal.md)
-- [s3r.ch Spanopticon integration](../../docs/s3rch-interfaces.md)
+- [s3r.ch Spanopticon integration](https://github.com/hyperme-sh/spanopticon/blob/main/docs/s3rch-interfaces.md)
 - [Payment service](https://github.com/hyperme-sh/payment-service)
-- [Verification deployment](../../verification/README.md)
+- [Verification deployment](https://github.com/hyperme-sh/spanopticon/tree/main/verification)
 
 ## Compose
 
@@ -66,3 +66,22 @@ select optional services too. The chart creates internal Services. Point your in
 at the appropriate site Service. Set the image tag for each enabled service
 independently. Compose pulls the selected tags on startup. Each Helm upgrade
 replaces the pods so Kubernetes pulls those tags again.
+
+## Download a TEST bundle
+
+Each preset has its own GHCR package. Pull the moving `test` tag to get the
+latest published configuration, or substitute its published `0.24.0-test.N`
+tag to retrieve a specific version.
+
+```sh
+oras pull ghcr.io/hyperme-sh/spanopticon-config-s3rch:test
+oras pull ghcr.io/hyperme-sh/spanopticon-config-hyperme:test
+oras pull ghcr.io/hyperme-sh/spanopticon-config-spanopticon:test
+```
+
+Extract the downloaded preset archive and run the matching Compose or Helm
+command above. The separate `bundle.json` records the exact configuration tag
+and the service image tags the files use. The bundle and service tags move
+independently. Today the presets follow the latest image on each configured TEST
+channel. After the v0.24 development line, the presets will recommend a specific
+major-version channel for each service.
