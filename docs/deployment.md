@@ -90,3 +90,41 @@ does not authorize it.
 
 Runtime and minimum-profile checks are registered in Infra's `spanopticon-runtime`
 nightly adapter (infra #922). PRs run unit/contract and Helm rendering checks only.
+
+## Enterprise Portal configuration
+
+The enterprise generator reads `deployment/enterprise-services.json`. Its Portal entry selects
+the owner repository and the registry tag to deploy. Adjust `channel` to use
+another authorized tag on that repository. The included inventory follows
+`ghcr.io/hyperme-sh/controlplane-portal/runtime:test`.
+
+```sh
+python3 scripts/render_fleet.py --chart-version 0.1.0 --output portal-bundle
+```
+
+The output includes `compose.json`, `chart.tgz`, and `runtime-inputs.json`.
+The chart version describes the generated configuration. Compose and Helm use
+the image currently published at the configured tag when deploying. A Helm
+upgrade rolls the Portal pod so it pulls the tag again.
+
+Provide the settings listed in `runtime-inputs.json` from the owning
+environment. Compose reads these as environment variables and mounts the
+Portal session secret from the file referenced by `PORTAL_AUTH_SECRET_FILE`.
+Helm reads the settings from ConfigMap `portal-settings`, the session secret
+from key `token` of Secret `portal-auth`, and image pull credentials from
+Secret `fleet-ghcr` in the release namespace. Use the existing secret store and
+deployment identity. The bundle contains references only. Connect Portal to
+the environment's ingress, identity provider, and service endpoints.
+
+After those inputs are ready, the enterprise deployment workflow can use either
+engine:
+
+```sh
+docker compose --file ./portal-bundle/compose.json up --detach --pull always
+helm upgrade --install portal ./portal-bundle/chart.tgz --namespace portal --wait
+```
+
+Each service owner builds, qualifies, and publishes its image. Library releases
+trigger rebuilds through the declared library-to-service dependencies. The
+enterprise generator reads the configured tags and leaves the component release
+workflows independent.

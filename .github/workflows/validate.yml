@@ -44,6 +44,15 @@ jobs:
           python3 scripts/render_release.py --artifact-qualification-only --previous examples/releases/accepted/release.json --candidate examples/releases/candidate/release.json --assurance-config examples/assurance/kyc.json --output "$RUNNER_TEMP/release-example"
           SPANOPTICON_SECRET_KYC_CLIENT_FILE=/dev/null docker compose -f "$RUNNER_TEMP/release-example/api/compose.yaml" config --quiet
           SPANOPTICON_SECRET_KYC_CLIENT_FILE=/dev/null docker compose -f "$RUNNER_TEMP/release-example/worker/compose.yaml" config --quiet
+      - name: Validate enterprise Portal configuration
+        env:
+          CHECK_ENTERPRISE_RENDER: '1'
+        run: |
+          if ! command -v helm >/dev/null; then
+            python3 scripts/install_deployment_test_tools.py --output "$RUNNER_TEMP/enterprise-render-tools"
+            export PATH="$RUNNER_TEMP/enterprise-render-tools:$PATH"
+          fi
+          python3 -m unittest discover -s tests -p test_fleet_inventory.py
       - name: Validate the template distribution
         run: bash scripts/check-archive.sh
   release-policy-fixture:
