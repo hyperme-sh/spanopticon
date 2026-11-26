@@ -18,6 +18,7 @@ sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'scripts'))
 from assurance import settings
 
 LIMIT = 16 * 1024 * 1024
+BUNDLE_TAG_ENV = 'SPANOPTICON_BUNDLE_TAG'
 NAME = r'[a-z](?:[a-z0-9-]{0,38}[a-z0-9])?'
 
 
@@ -185,6 +186,15 @@ def helm_check(raw,lock,assurance,namespace):
     return items
 
 
+def bind_helm_bundle_tag(items, tag):
+    for item in items:
+        if item['kind'] == 'Deployment':
+            container = item['spec']['template']['spec']['containers'][0]
+            env = [entry for entry in container.get('env', []) if entry['name'] != BUNDLE_TAG_ENV]
+            container['env'] = [*env, {'name': BUNDLE_TAG_ENV, 'value': tag}]
+    return b''.join(b'---\n' + canonical(item) + b'\n' for item in items)
+
+
 def deploy(layout,engine,name,assurance,output,*,apply=False,context=None,timeout=180):
     b.require(engine in ('compose','helm') and b.matches(NAME,name),'Invalid deployment engine or test name')
     b.require(type(timeout) is int and 1<=timeout<=900,'Timeout must be 1..900 seconds')
@@ -206,11 +216,16 @@ def deploy(layout,engine,name,assurance,output,*,apply=False,context=None,timeou
         normalized=b.document(command(prefix+['config','--format','json'],env=env))
         compose_check(normalized,lock,assurance)
         normalized.pop('name',None)
+        for service in normalized['services'].values():
+            service.setdefault('environment', {})[BUNDLE_TAG_ENV] = lock['candidate']
         # Use the normalized bytes for execution; prevent another interpolation pass.
         frozen=destination/'compose.resolved.json';frozen.write_bytes(canonical(normalized))
         prefix[-1]=str(frozen)
         resolved=b.document(command(prefix+['config','--no-interpolate','--format','json'],env=env))
         compose_check(resolved,lock,assurance)
+        for service in resolved['services'].values():
+            b.require(service.get('environment', {}).get(BUNDLE_TAG_ENV) == lock['candidate'],
+                      'Compose bundle tag differs from the verified candidate')
         if apply:
             # Dollar escaping avoids environment re-expansion in frozen service commands/settings.
             frozen.write_text(json.dumps(normalized).replace('$','$$'))
@@ -222,11 +237,12 @@ def deploy(layout,engine,name,assurance,output,*,apply=False,context=None,timeou
         b.require(context and not context.startswith('-'),'An explicit Kubernetes context is required')
         rendered=command(['helm','template',name,str(chart),'--namespace',name,'--kube-context',context],env=env)
         items=helm_check(rendered,lock,assurance,name)
-        expected=destination/'helm.expected.json';expected.write_bytes(canonical(items))
+        expected=hashlib.sha256(canonical(items)).hexdigest()
         gate=destination/'helm-post-renderer'
         script=Path(__file__).resolve().parents[1]/'scripts/helm_bundle_gate.py'
-        gate.write_text('#!/bin/sh\nexec '+shlex.quote(sys.executable)+' '+shlex.quote(str(script))+' '+shlex.quote(str(expected))+'\n')
+        gate.write_text('#!/bin/sh\nexec '+shlex.quote(sys.executable)+' '+shlex.quote(str(script))+' '+shlex.quote(expected)+' '+shlex.quote(lock['candidate'])+'\n')
         gate.chmod(0o700)
+        rendered=bind_helm_bundle_tag(items,lock['candidate'])
         if apply:
             command(['helm','upgrade','--install',name,str(chart),'--namespace',name,'--kube-context',context,
                      '--create-namespace','--no-hooks','--skip-crds','--wait','--timeout',str(timeout)+'s','--post-renderer',str(gate)],env=env,timeout=timeout+120)

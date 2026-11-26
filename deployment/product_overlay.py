@@ -19,10 +19,16 @@ def choices(value, allowed, label):
     )
 
 
+def validate_tenant_version(value):
+    part = r"(0|[1-9][0-9]{0,8})"
+    require(isinstance(value, str) and re.fullmatch(rf"{part}\.{part}\.{part}", value),
+            "Expected tenant_version as MAJOR.MINOR.PATCH")
+
+
 def validate(overlay):
     require(isinstance(overlay, dict), "Expected product overlay object")
     expected = {"schema_version", "product", "display_name", "plane_overlay", "services"}
-    fields(overlay, expected | ({"login"} & overlay.keys()), "product overlay")
+    fields(overlay, expected | ({"login", "tenant_version"} & overlay.keys()), "product overlay")
     require(type(overlay["schema_version"]) is int and overlay["schema_version"] == 1,
             "Unsupported product overlay schema version")
     for field, pattern in (("product", r"[a-z0-9]+(?:[.-][a-z0-9]+)*"),
@@ -31,6 +37,9 @@ def validate(overlay):
     name = overlay["display_name"]
     require(isinstance(name, str) and 0 < len(name) <= 95 and name == name.strip()
             and all(ord(char) >= 32 and char not in "<>" for char in name), "Invalid product display name")
+
+    if "tenant_version" in overlay:
+        validate_tenant_version(overlay["tenant_version"])
 
     services = overlay["services"]
     choices(services, {"plane", "keycloak"}, "overlay service")
