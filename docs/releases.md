@@ -116,8 +116,9 @@ checkout must descend from the build revision and differ only in the allowed
 release files. Existing stable releases or earlier stable tags require an
 accepted baseline.
 
-Admission checks the declaration and build and leaves publication to the
-separately authorized owner release path.
+Admission returns the qualified image URI and build revision for the separately
+authorized owner publisher. The publisher can call admission on the exact
+stable tag before copying the manifest.
 
 ## Render a validated bundle
 

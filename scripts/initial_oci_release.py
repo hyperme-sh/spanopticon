@@ -3,6 +3,7 @@
 
 import argparse
 import hashlib
+import os
 from pathlib import Path
 import re
 import subprocess
@@ -115,6 +116,9 @@ def main():
                                    args.revision, args.ref)
     except (PolicyError, OSError, ValueError, TypeError, KeyError, AttributeError) as error:
         parser.exit(1, f'OCI release admission rejected: {error}\n')
+    if output := os.environ.get('GITHUB_OUTPUT'):
+        with open(output, 'a', encoding='utf-8') as stream:
+            stream.write(f'image={image}\nsource-revision={source}\n')
     print(f'{tag}: {image} qualified at {source}')
 
 
