@@ -18,11 +18,11 @@ TEMPLATE=b'''{{- $resources := .Files.Get "resources.json" | fromJson -}}
 '''
 
 
-def chart_bytes(candidate,items):
+def chart_bytes(candidate,items,*,template=TEMPLATE):
     files={
         'spanopticon-plane/Chart.yaml':('apiVersion: v2\nname: spanopticon-plane\nversion: '+candidate+'\ntype: application\n').encode(),
         'spanopticon-plane/resources.json':(json.dumps({'apiVersion':'v1','kind':'List','items':items},sort_keys=True,indent=2)+'\n').encode(),
-        'spanopticon-plane/templates/resources.yaml':TEMPLATE,
+        'spanopticon-plane/templates/resources.yaml':template,
     }
     target=io.BytesIO()
     with gzip.GzipFile(fileobj=target,mode='wb',mtime=0) as zipped:
