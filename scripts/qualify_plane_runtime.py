@@ -25,11 +25,11 @@ def main():
     run(['docker','pull','--platform','linux/amd64',pin['source']+'@'+pin['manifest_digest']],stdout=subprocess.DEVNULL)
     local_image='qualified-owner:plane-'+pin['source_revision']
     run(['docker','image','tag',pin['source']+'@'+pin['manifest_digest'],local_image])
-    project='plane-check-'+uuid.uuid4().hex[:10];password=secrets.token_hex(24);key=secrets.token_hex(32)
+    project='plane-check-'+uuid.uuid4().hex[:10];password=secrets.token_hex(24)
     with tempfile.TemporaryDirectory(prefix='plane-qualification-') as directory:
         scratch=Path(directory)
         if args.engine=='compose':
-            env={**os.environ,'TEST_POSTGRES_PASSWORD':password,'TEST_TICKET_KEY':key}
+            env={**os.environ,'TEST_POSTGRES_PASSWORD':password}
             override=scratch/'override.json';override.write_text(json.dumps({'services':{n:{'image':local_image,'pull_policy':'never'} for n in ('plane','provision')}}))
             cmd=['docker','compose','-p',project,'-f',str(ROOT/'fleet/plane/compose.yaml'),'-f',str(override)]
             try:
@@ -47,7 +47,7 @@ def main():
                 run(['kind','create','cluster','--name',project,'--image','kindest/node:v1.37.0@sha256:a1ed56cfb0e7b93589bdf97c8cd566405a265939e3620fc4f5de89adff580ae5','--wait','120s'],env=env)
                 run(['kind','load','image-archive',str(args.directory/'image.tar'),'--name',project],env=env)
                 run(['docker','exec',project+'-control-plane','ctr','-n','k8s.io','images','tag','docker.io/library/qualified-owner:ci',pin['destination']+':qualification'])
-                secret={'apiVersion':'v1','kind':'Secret','metadata':{'name':'plane-test'},'stringData':{'postgres-password':password,'ticket-key':key,'database-url':f'postgresql+psycopg://plane_test:{password}@{project}-postgres:5432/plane_test'}}
+                secret={'apiVersion':'v1','kind':'Secret','metadata':{'name':'plane-test'},'stringData':{'postgres-password':password,'database-url':f'postgresql+psycopg://plane_test:{password}@{project}-postgres:5432/plane_test'}}
                 run(['kubectl','apply','-f','-'],env=env,input=json.dumps(secret).encode(),stdout=subprocess.DEVNULL)
                 helm=['helm','upgrade','--install',project,str(ROOT/'fleet/plane/chart'),'--set','existingSecret=plane-test','--set','imagePullPolicy=Never','--set-string','imageReference='+pin['destination']+':qualification','--wait','--timeout','180s']
                 run(helm,env=env)

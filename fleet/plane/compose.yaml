@@ -9,7 +9,6 @@ x-plane: &plane
   tmpfs: ['/tmp:rw,noexec,nosuid,size=33554432,mode=1777']
   environment: &plane-env
     DATABASE_URL: postgresql+psycopg://plane_test:${TEST_POSTGRES_PASSWORD:?Provide a disposable test password}@postgres:5432/plane_test
-    HYPERMESH_TICKET_HMAC_KEY: ${TEST_TICKET_KEY:?Provide a disposable test signing key}
     FASTAPI_ENV: production
     PYTHONDONTWRITEBYTECODE: '1'
     PORT: '8000'

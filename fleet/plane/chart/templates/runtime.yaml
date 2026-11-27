@@ -102,11 +102,6 @@ spec:
             secretKeyRef:
               name: '{{ $secret }}'
               key: database-url
-        - name: HYPERMESH_TICKET_HMAC_KEY
-          valueFrom:
-            secretKeyRef:
-              name: '{{ $secret }}'
-              key: ticket-key
         - name: FASTAPI_ENV
           value: production
         - name: PORT
@@ -136,11 +131,6 @@ spec:
             secretKeyRef:
               name: '{{ $secret }}'
               key: database-url
-        - name: HYPERMESH_TICKET_HMAC_KEY
-          valueFrom:
-            secretKeyRef:
-              name: '{{ $secret }}'
-              key: ticket-key
         - name: FASTAPI_ENV
           value: production
         - name: PORT
