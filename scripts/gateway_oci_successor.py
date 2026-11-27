@@ -1,4 +1,4 @@
-"""Verify a minor Gateway OCI successor against its published runtime."""
+"""Verify a Gateway OCI successor against its published runtime."""
 
 import argparse
 import json
@@ -49,6 +49,13 @@ def compare_api(before, after, previous, candidate):
             'Gateway OCI successor changed the published OpenAPI contract')
 
 
+def require_successor(previous, candidate):
+    major, minor, patch = version(previous)
+    allowed = {(major, minor, patch + 1), (major, minor + 1, 0)}
+    require(version(candidate) in allowed,
+            'Gateway OCI successor must be the next patch or minor from its accepted baseline')
+
+
 def admit(current, baseline, baseline_revision, repository, line, requested, revision, ref,
           *, fetch=github_json, export=read_openapi):
     require(repository == OWNER and requested and SHA.fullmatch(revision) and SHA.fullmatch(baseline_revision),
@@ -65,9 +72,7 @@ def admit(current, baseline, baseline_revision, repository, line, requested, rev
             and prior_artifact['uri'] == f"{IMAGE_REPOSITORY}@sha256:{prior_artifact['sha256']}",
             'The accepted baseline must be the immutable Gateway OCI runtime')
     candidate = candidate_component(current, repository, line, requested)
-    major, minor, _ = version(previous)
-    require(version(candidate['version']) == (major, minor + 1, 0),
-            'Gateway OCI successor must be the next minor from its accepted baseline')
+    require_successor(previous, candidate['version'])
     tag, image, source = verify_candidate_image(current, candidate, revision, ref, fetch, previous=previous)
     compare_api(export(prior_artifact['uri']), export(image), previous, candidate['version'])
     return tag, image, source

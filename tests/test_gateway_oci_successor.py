@@ -17,6 +17,15 @@ class GatewayOciSuccessorTest(unittest.TestCase):
         self.after = copy.deepcopy(self.before)
         self.after['info']['version'] = '0.2.0'
 
+    def test_only_the_next_patch_or_minor_is_a_successor(self):
+        policy.require_successor('0.2.0', '0.2.1')
+        policy.require_successor('0.2.7', '0.2.8')
+        policy.require_successor('0.1.7', '0.2.0')
+        for candidate in ('0.1.9', '0.2.0', '0.2.2', '0.3.1', '0.4.0', '1.0.0'):
+            with self.subTest(candidate=candidate):
+                with self.assertRaisesRegex(ValueError, 'next patch or minor'):
+                    policy.require_successor('0.2.0', candidate)
+
     def test_same_network_contract_preserves_the_runtime_version_check(self):
         policy.compare_api(self.before, self.after, '0.1.0', '0.2.0')
         with self.assertRaisesRegex(ValueError, 'reported version'):
