@@ -1,6 +1,8 @@
 """Fleet selector contracts only; engines and registries are not started."""
 from pathlib import Path
 import re
+import shutil
+import subprocess
 import unittest
 import yaml
 
@@ -38,6 +40,34 @@ class FleetImageTags(unittest.TestCase):
         self.assertNotIn('.manifest_digest',script)
         self.assertNotIn('.config_digest',script)
         self.assertNotIn('cmp -s',script)
+
+    def test_plane_fleet_assets_carry_no_hmac_ticket_key(self):
+        forbidden = (
+            'HYPERMESH_TICKET_HMAC_KEY',
+            'ticket-key',
+            'TEST_TICKET_KEY',
+        )
+        paths = [
+            ROOT / 'fleet/plane/compose.yaml',
+            ROOT / 'fleet/plane/chart/templates/runtime.yaml',
+            ROOT / 'fleet/plane/README.md',
+            ROOT / 'scripts/qualify_plane_runtime.py',
+            ROOT / 'scripts/check_published_deployment.sh',
+        ]
+        for path in paths:
+            text = path.read_text()
+            for token in forbidden:
+                self.assertNotIn(token, text, msg=f'{token} still present in {path.relative_to(ROOT)}')
+        if shutil.which('helm'):
+            rendered = subprocess.check_output(
+                [
+                    'helm', 'template', 'plane-test', str(ROOT / 'fleet/plane/chart'),
+                    '--set', 'existingSecret=plane-test',
+                ],
+                text=True,
+            )
+            for token in forbidden:
+                self.assertNotIn(token, rendered)
 
 
 if __name__ == '__main__':

@@ -7,14 +7,14 @@ and then run the image's normal guarded schema-startup entrypoint. Billing is
 not installed. The test profile explicitly allows an empty database and uses an
 ephemeral enrollment marker. It is not a production database or restore setup.
 
-Compose requires random, test-only `TEST_POSTGRES_PASSWORD` and `TEST_TICKET_KEY`
-values. Use URL-safe hexadecimal values for the password because it is included
-in the database URL. No database port is published; the plane binds a random
-loopback-only host port. The database lives on tmpfs and is discarded when its
-container is removed. Do not store real hosts, tenant data or payments here.
+Compose requires a random, test-only `TEST_POSTGRES_PASSWORD` value. Use a
+URL-safe hexadecimal value because the password is included in the database URL.
+No database port is published; the plane binds a random loopback-only host port.
+The database lives on tmpfs and is discarded when its container is removed. Do not
+store real hosts, tenant data or payments here.
 
-The Helm chart requires `existingSecret`, with `postgres-password`, `ticket-key`
-and `database-url` keys. The database URL must address `<release>-postgres:5432`,
+The Helm chart requires `existingSecret`, with `postgres-password` and
+`database-url` keys. The database URL must address `<release>-postgres:5432`,
 database and username `plane_test`. The migration init container rejects URLs
 that name another host, database, user or driver before connecting. Use a
 disposable namespace/cluster. PostgreSQL

@@ -32,7 +32,7 @@ auth = base64.b64encode(f"{os.environ['GITHUB_ACTOR']}:{os.environ['GHCR_TOKEN']
 (Path(os.environ['DOCKER_CONFIG']) / 'config.json').write_text(json.dumps({'auths': {'ghcr.io': {'auth': auth}}}))
 PY
 unset GHCR_TOKEN
-export TEST_POSTGRES_PASSWORD=$(openssl rand -hex 24) TEST_TICKET_KEY=$(openssl rand -hex 32)
+export TEST_POSTGRES_PASSWORD=$(openssl rand -hex 24)
 for owner in gateway plane; do
   pin="published/fleet/owner-images/hypermesh-$owner.json"
   image=$(jq -er .destination "$pin")
@@ -55,7 +55,7 @@ else
 import json, os
 password = os.environ['TEST_POSTGRES_PASSWORD']
 print(json.dumps({'apiVersion':'v1','kind':'Secret','metadata':{'name':'plane-test'},
-                  'stringData':{'postgres-password':password,'ticket-key':os.environ['TEST_TICKET_KEY'],
+                  'stringData':{'postgres-password':password,
                                 'database-url':f'postgresql+psycopg://plane_test:{password}@plane-postgres:5432/plane_test'}}))
 PY
   helm install gateway "${assets[gateway]}/chart" --set-string "imageReference=$GATEWAY_IMAGE" --wait --timeout 3m
