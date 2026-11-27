@@ -27,4 +27,5 @@ deployment and operational acceptance.
 
 Spanopticon supplies s3r.ch's out-of-network service interfaces through the edge
 and the appropriate backend owners. See [s3r.ch interfaces](s3rch-interfaces.md)
-for the opaque contact-lane contract and ownership boundaries.
+for contact lanes, Squad ACL graph sources, tenant storage, and Plane forum bot
+routing.
